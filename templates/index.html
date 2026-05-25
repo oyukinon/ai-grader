@@ -1,0 +1,929 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 智能改卷系统</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        /* ========== CSS Variables ========== */
+        :root {
+            --bg: #f5f0e8;
+            --surface: #ffffff;
+            --surface-alt: #faf7f2;
+            --accent: #b44a2d;
+            --accent-light: #d4654a;
+            --accent-bg: #fdf0ec;
+            --text: #2c2418;
+            --text-muted: #8a7e6e;
+            --border: #e0d8ca;
+            --border-strong: #c4b8a4;
+            --green: #3a7d44;
+            --green-bg: #edf7ef;
+            --red: #b44a2d;
+            --red-bg: #fdf0ec;
+            --shadow: 0 2px 20px rgba(44, 36, 24, 0.06);
+            --shadow-lg: 0 8px 40px rgba(44, 36, 24, 0.1);
+            --radius: 12px;
+            --radius-sm: 8px;
+            --font-display: 'Noto Serif SC', serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        /* ========== Reset & Base ========== */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: var(--font-display);
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.7;
+        }
+
+        /* ========== Texture Overlay ========== */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.4'/%3E%3C/svg%3E");
+            opacity: 0.03;
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        /* ========== Layout ========== */
+        .container {
+            max-width: 880px;
+            margin: 0 auto;
+            padding: 3rem 2rem 6rem;
+        }
+
+        /* ========== Header ========== */
+        header {
+            text-align: left;
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 2px solid var(--text);
+        }
+
+        header h1 {
+            font-size: 2.6rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            line-height: 1.2;
+            margin-bottom: 0.5rem;
+        }
+
+        header h1 span {
+            color: var(--accent);
+        }
+
+        header p {
+            color: var(--text-muted);
+            font-size: 1rem;
+            max-width: 500px;
+        }
+
+        /* ========== Sections ========== */
+        .section {
+            margin-bottom: 2.5rem;
+        }
+
+        .section-label {
+            font-size: 0.75rem;
+            font-family: var(--font-mono);
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: var(--accent);
+            margin-bottom: 0.75rem;
+            font-weight: 500;
+        }
+
+        /* ========== Cards ========== */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+        }
+
+        /* ========== API Config ========== */
+        .api-config {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .api-config .full-width {
+            grid-column: 1 / -1;
+        }
+
+        .toggle-btn {
+            background: none;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 0.5rem 1rem;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .toggle-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* ========== Form Elements ========== */
+        label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 0.4rem;
+            color: var(--text);
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 0.7rem 0.9rem;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            background: var(--surface-alt);
+            color: var(--text);
+            transition: border-color 0.2s;
+            outline: none;
+        }
+
+        input:focus {
+            border-color: var(--accent);
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 200px;
+            padding: 1rem;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-family: var(--font-display);
+            font-size: 0.9rem;
+            line-height: 1.7;
+            background: var(--surface-alt);
+            color: var(--text);
+            resize: vertical;
+            transition: border-color 0.2s;
+            outline: none;
+        }
+
+        textarea:focus {
+            border-color: var(--accent);
+        }
+
+        /* ========== File Upload ========== */
+        .upload-zone {
+            border: 2px dashed var(--border-strong);
+            border-radius: var(--radius);
+            padding: 2.5rem 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: var(--surface-alt);
+            position: relative;
+        }
+
+        .upload-zone:hover,
+        .upload-zone.drag-over {
+            border-color: var(--accent);
+            background: var(--accent-bg);
+        }
+
+        .upload-zone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .upload-icon {
+            font-size: 2rem;
+            margin-bottom: 0.75rem;
+            opacity: 0.6;
+        }
+
+        .upload-text {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+        }
+
+        .upload-text strong {
+            color: var(--accent);
+        }
+
+        .upload-hint {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.5rem;
+            font-family: var(--font-mono);
+        }
+
+        .file-list {
+            margin-top: 1rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .file-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: var(--accent-bg);
+            border: 1px solid var(--accent-light);
+            border-radius: 20px;
+            padding: 0.3rem 0.75rem;
+            font-size: 0.8rem;
+            font-family: var(--font-mono);
+            color: var(--accent);
+        }
+
+        .file-tag .remove {
+            cursor: pointer;
+            font-weight: 700;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+        }
+
+        .file-tag .remove:hover {
+            opacity: 1;
+        }
+
+        /* ========== Buttons ========== */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.8rem 1.8rem;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-family: var(--font-display);
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.25s;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: var(--text);
+            color: var(--bg);
+            letter-spacing: 0.02em;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(180, 74, 45, 0.25);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text);
+            border: 1.5px solid var(--border-strong);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+            margin-top: 1.5rem;
+        }
+
+        /* ========== Spinner ========== */
+        .spinner {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 2px solid currentColor;
+            border-right-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 1rem;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .progress-bar.active {
+            opacity: 1;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 2px;
+            width: 0%;
+            transition: width 0.5s ease;
+        }
+
+        /* ========== Results ========== */
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .result-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            margin-bottom: 1.25rem;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            opacity: 0;
+            animation: fadeUp 0.4s ease forwards;
+        }
+
+        .result-card:nth-child(2) { animation-delay: 0.05s; }
+        .result-card:nth-child(3) { animation-delay: 0.1s; }
+        .result-card:nth-child(4) { animation-delay: 0.15s; }
+        .result-card:nth-child(5) { animation-delay: 0.2s; }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.2rem 1.5rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .result-header:hover {
+            background: var(--surface-alt);
+        }
+
+        .result-name {
+            font-size: 1.05rem;
+            font-weight: 600;
+        }
+
+        .result-badges {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .badge {
+            padding: 0.25rem 0.65rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-family: var(--font-mono);
+            font-weight: 500;
+        }
+
+        .badge-score {
+            background: var(--accent-bg);
+            color: var(--accent);
+        }
+
+        .badge-grade {
+            background: var(--text);
+            color: var(--bg);
+        }
+
+        .badge-error {
+            background: var(--red-bg);
+            color: var(--red);
+        }
+
+        .result-body {
+            padding: 0 1.5rem 1.5rem;
+            display: none;
+        }
+
+        .result-body.open {
+            display: block;
+        }
+
+        .result-section {
+            margin-bottom: 1rem;
+        }
+
+        .result-section h4 {
+            font-size: 0.8rem;
+            font-family: var(--font-mono);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-muted);
+            margin-bottom: 0.4rem;
+        }
+
+        .result-section p {
+            font-size: 0.9rem;
+            line-height: 1.8;
+        }
+
+        .result-section ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .result-section li {
+            font-size: 0.88rem;
+            padding: 0.3rem 0;
+            padding-left: 1.2rem;
+            position: relative;
+            line-height: 1.6;
+        }
+
+        .result-section li::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0.7rem;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+
+        .correct li::before { background: var(--green); }
+        .wrong li::before { background: var(--red); }
+        .suggestions li::before { background: var(--accent); }
+
+        .expand-arrow {
+            transition: transform 0.3s;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .result-header.expanded .expand-arrow {
+            transform: rotate(180deg);
+        }
+
+        /* ========== Error Card ========== */
+        .error-card {
+            border-color: var(--red);
+            border-left: 4px solid var(--red);
+        }
+
+        .error-msg {
+            padding: 1rem 1.5rem;
+            color: var(--red);
+            font-size: 0.9rem;
+        }
+
+        /* ========== Summary Stats ========== */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 1.2rem;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: 0.3rem;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            font-family: var(--font-mono);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-muted);
+        }
+
+        /* ========== Status Log ========== */
+        #status {
+            margin-top: 1rem;
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            min-height: 1.5em;
+        }
+
+        /* ========== Responsive ========== */
+        @media (max-width: 640px) {
+            .container { padding: 2rem 1rem 4rem; }
+            header h1 { font-size: 1.8rem; }
+            .api-config { grid-template-columns: 1fr; }
+            .stats { grid-template-columns: 1fr; }
+            .btn-group { flex-direction: column; align-items: stretch; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>AI<span>改卷</span>系统</h1>
+            <p>上传学生答案，AI 自动评分并生成详细批改意见</p>
+        </header>
+
+        <!-- API Configuration -->
+        <div class="section">
+            <div class="section-label">01 / API 配置</div>
+            <div class="card">
+                <div class="api-config">
+                    <div class="full-width">
+                        <button class="toggle-btn" onclick="toggleApiConfig()">
+                            <span id="toggleText">展开配置</span> ▾
+                        </button>
+                    </div>
+                    <div id="apiConfigFields" style="display:none;" class="full-width">
+                        <div style="margin-top:1rem;">
+                            <label for="apiKey">API Key</label>
+                            <input type="password" id="apiKey" placeholder="sk-..." autocomplete="off">
+                        </div>
+                        <div style="margin-top:1rem;">
+                            <label for="apiBase">API 地址</label>
+                            <input type="text" id="apiBase" value="https://api.openai.com/v1">
+                        </div>
+                        <div style="margin-top:1rem;">
+                            <label for="model">模型</label>
+                            <input type="text" id="model" value="gpt-4o">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reference Answer -->
+        <div class="section">
+            <div class="section-label">02 / 参考答案与评分标准</div>
+            <div class="card">
+                <textarea id="reference" placeholder="在此输入标准答案和评分标准，例如：&#10;&#10;题目：请解释 HTTP 和 HTTPS 的区别（100分）&#10;&#10;评分标准：&#10;1. 正确说明 HTTPS = HTTP + SSL/TLS（20分）&#10;2. 提到数据加密传输（20分）&#10;3. 提到证书机制（15分）&#10;4. 提到端口区别 443 vs 80（15分）&#10;5. 提到安全性差异（15分）&#10;6. 表述清晰有条理（15分）&#10;&#10;参考答案：&#10;HTTPS 是 HTTP 的安全版本，通过 SSL/TLS 协议对数据进行加密传输..."></textarea>
+            </div>
+        </div>
+
+        <!-- File Upload -->
+        <div class="section">
+            <div class="section-label">03 / 上传学生答案</div>
+            <div class="card" style="padding: 0; overflow: hidden;">
+                <div class="upload-zone" id="uploadZone">
+                    <input type="file" id="fileInput" multiple accept=".txt,.md">
+                    <div class="upload-icon">↑</div>
+                    <div class="upload-text">
+                        拖拽文件到这里，或 <strong>点击选择</strong>
+                    </div>
+                    <div class="upload-hint">支持 .txt / .md 格式 · 文件名即为学生姓名</div>
+                </div>
+                <div id="fileList" class="file-list" style="padding: 0 1.5rem 1rem;"></div>
+            </div>
+        </div>
+
+        <!-- Action -->
+        <div class="section">
+            <div class="btn-group">
+                <button class="btn btn-primary" id="gradeBtn" onclick="startGrading()">
+                    开始批改
+                </button>
+                <button class="btn btn-secondary" id="exportBtn" onclick="exportCSV()" style="display:none;">
+                    导出 CSV
+                </button>
+            </div>
+            <div class="progress-bar" id="progressBar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div id="status"></div>
+        </div>
+
+        <!-- Results -->
+        <div id="resultsContainer" style="display: none;">
+            <div class="section">
+                <div class="section-label">04 / 批改结果</div>
+                <div class="stats" id="stats"></div>
+                <div id="results"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========== State ==========
+        let selectedFiles = [];
+        let lastResults = [];
+
+        // ========== API Config Toggle ==========
+        function toggleApiConfig() {
+            const fields = document.getElementById('apiConfigFields');
+            const text = document.getElementById('toggleText');
+            if (fields.style.display === 'none') {
+                fields.style.display = 'block';
+                text.textContent = '收起配置';
+            } else {
+                fields.style.display = 'none';
+                text.textContent = '展开配置';
+            }
+        }
+
+        // ========== File Upload ==========
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('drag-over');
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('drag-over');
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('drag-over');
+            addFiles(e.dataTransfer.files);
+        });
+
+        fileInput.addEventListener('change', () => {
+            addFiles(fileInput.files);
+            fileInput.value = '';
+        });
+
+        function addFiles(fileListObj) {
+            for (const f of fileListObj) {
+                if (!selectedFiles.some(s => s.name === f.name)) {
+                    selectedFiles.push(f);
+                }
+            }
+            renderFileList();
+        }
+
+        function removeFile(name) {
+            selectedFiles = selectedFiles.filter(f => f.name !== name);
+            renderFileList();
+        }
+
+        function renderFileList() {
+            const container = document.getElementById('fileList');
+            container.innerHTML = selectedFiles.map(f => `
+                <span class="file-tag">
+                    ${f.name}
+                    <span class="remove" onclick="removeFile('${f.name}')">×</span>
+                </span>
+            `).join('');
+        }
+
+        // ========== Grading ==========
+        async function startGrading() {
+            const reference = document.getElementById('reference').value.trim();
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const apiBase = document.getElementById('apiBase').value.trim();
+            const model = document.getElementById('model').value.trim();
+
+            // Validation
+            if (!apiKey) {
+                alert('请填写 API Key（点击「展开配置」按钮）');
+                toggleApiConfig();
+                return;
+            }
+            if (!reference) {
+                alert('请填写参考答案与评分标准');
+                return;
+            }
+            if (selectedFiles.length === 0) {
+                alert('请上传至少一个学生答案文件');
+                return;
+            }
+
+            // Prepare UI
+            const btn = document.getElementById('gradeBtn');
+            const progressBar = document.getElementById('progressBar');
+            const progressFill = document.getElementById('progressFill');
+            const status = document.getElementById('status');
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> 批改中...';
+            progressBar.classList.add('active');
+            progressFill.style.width = '0%';
+            status.textContent = `正在准备批改 ${selectedFiles.length} 份答案...`;
+
+            // Build FormData
+            const formData = new FormData();
+            formData.append('api_key', apiKey);
+            formData.append('api_base', apiBase || 'https://api.openai.com/v1');
+            formData.append('model', model || 'gpt-4o');
+            formData.append('reference', reference);
+
+            for (const f of selectedFiles) {
+                formData.append('files', f);
+            }
+
+            const total = selectedFiles.length;
+            progressFill.style.width = '30%';
+            status.textContent = `正在上传 ${total} 份文件，AI 即将开始批改...`;
+
+            try {
+                const resp = await fetch('/api/grade', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                progressFill.style.width = '80%';
+                status.textContent = 'AI 正在评分，请稍候...';
+
+                const data = await resp.json();
+
+                if (data.error) {
+                    alert(data.error);
+                    resetUI();
+                    return;
+                }
+
+                progressFill.style.width = '100%';
+                status.textContent = `批改完成！共处理 ${data.results.length} 份答案。`;
+
+                lastResults = data.results;
+                renderResults(data.results);
+
+                document.getElementById('exportBtn').style.display = 'inline-flex';
+
+            } catch (err) {
+                alert('请求失败: ' + err.message);
+            }
+
+            resetUI();
+        }
+
+        function resetUI() {
+            const btn = document.getElementById('gradeBtn');
+            btn.disabled = false;
+            btn.innerHTML = '开始批改';
+            setTimeout(() => {
+                document.getElementById('progressBar').classList.remove('active');
+            }, 1000);
+        }
+
+        // ========== Render Results ==========
+        function renderResults(results) {
+            const container = document.getElementById('resultsContainer');
+            const resultsDiv = document.getElementById('results');
+            const statsDiv = document.getElementById('stats');
+
+            container.style.display = 'block';
+            resultsDiv.innerHTML = '';
+
+            // Stats
+            const successful = results.filter(r => r.success);
+            const avgScore = successful.length > 0
+                ? Math.round(successful.reduce((s, r) => s + (r.data.score || 0), 0) / successful.length)
+                : 0;
+            const maxScore = successful.length > 0
+                ? Math.max(...successful.map(r => r.data.score || 0))
+                : 0;
+            const minScore = successful.length > 0
+                ? Math.min(...successful.map(r => r.data.score || 0))
+                : 0;
+
+            statsDiv.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value" style="color: var(--accent);">${avgScore}</div>
+                    <div class="stat-label">平均分</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color: var(--green);">${maxScore}</div>
+                    <div class="stat-label">最高分</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color: var(--red);">${minScore}</div>
+                    <div class="stat-label">最低分</div>
+                </div>
+            `;
+
+            // Result cards
+            for (let i = 0; i < results.length; i++) {
+                const r = results[i];
+                const id = 'result-' + i;
+
+                if (!r.success) {
+                    resultsDiv.innerHTML += `
+                        <div class="result-card error-card">
+                            <div class="result-header">
+                                <span class="result-name">${r.student}</span>
+                                <span class="badge badge-error">批改失败</span>
+                            </div>
+                            <div class="error-msg">${r.error}</div>
+                        </div>
+                    `;
+                    continue;
+                }
+
+                const d = r.data;
+                resultsDiv.innerHTML += `
+                    <div class="result-card">
+                        <div class="result-header" onclick="toggleResult('${id}')">
+                            <span class="result-name">${r.student}</span>
+                            <div class="result-badges">
+                                <span class="badge badge-score">${d.score}/${d.max_score || 100}</span>
+                                <span class="badge badge-grade">${d.grade}</span>
+                                <span class="expand-arrow">▾</span>
+                            </div>
+                        </div>
+                        <div class="result-body" id="${id}">
+                            <div class="result-section">
+                                <h4>总体评价</h4>
+                                <p>${d.summary}</p>
+                            </div>
+                            <div class="result-section correct">
+                                <h4>正确要点</h4>
+                                <ul>${(d.correct_points || []).map(p => `<li>${p}</li>`).join('')}</ul>
+                            </div>
+                            <div class="result-section wrong">
+                                <h4>错误 / 缺失要点</h4>
+                                <ul>${(d.wrong_points || []).map(p => `<li>${p}</li>`).join('')}</ul>
+                            </div>
+                            <div class="result-section suggestions">
+                                <h4>改进建议</h4>
+                                <ul>${(d.suggestions || []).map(p => `<li>${p}</li>`).join('')}</ul>
+                            </div>
+                            <div class="result-section">
+                                <h4>详细评语</h4>
+                                <p>${d.detailed_comment}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function toggleResult(id) {
+            const el = document.getElementById(id);
+            const header = el.previousElementSibling;
+            el.classList.toggle('open');
+            header.classList.toggle('expanded');
+        }
+
+        // ========== Export ==========
+        async function exportCSV() {
+            if (lastResults.length === 0) return;
+
+            try {
+                const resp = await fetch('/api/export', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ results: lastResults }),
+                });
+
+                const blob = await resp.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = resp.headers.get('Content-Disposition')
+                    ?.split('filename=')[1] || 'grade_results.csv';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } catch (err) {
+                alert('导出失败: ' + err.message);
+            }
+        }
+    </script>
+</body>
+</html>
