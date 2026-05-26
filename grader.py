@@ -1,70 +1,70 @@
+﻿"""
+手动改卷评分模块
 """
-AI 改卷核心逻辑 — 负责调用 AI 接口进行评分
-"""
-from openai import OpenAI
-def build_prompt(reference_answer: str, student_answer: str) -> str:
-    """构建发送给 AI 的改卷提示词"""
-
-    prompt = f"""你是一位严格而公正的教师。请根据参考答案和评分标准，对学生的答案进行批改。
-
-参考答案与评分标准:{reference_answer}
-学生答案:{student_answer}
-要求请按以下 JSON 格式输出结果（不要输出其他内容）：
-
-json
-{{
-     "score": 85,
-     "max_score": 100,
-     "grade": "B+",
-     "summary": "总体评价（一句话）",
-     "correct_points": ["回答正确的要点1", "正确的要点2"],
-     "wrong_points": ["错误或缺失的要点1", "错误的要点2"],
-     "suggestions": ["改进建议1", "改进建议2"],
-     "detailed_comment": "详细的批改意见，逐条分析学生答案的优缺点"
-}}
-"""
-    return  prompt
-
 
 from openai import OpenAI
-import json
+import base64
 
-def grade_answer(api_key: str, api_base: str, model: str, reference_answer: str, student_answer: str) -> dict:
-    """调用AI API 进行改卷，返回评分结果"""
+
+def encode_image(image_file):
+    image_file.seek(0)
+    data = image_file.read()
+    b64 = base64.b64encode(data).decode("utf-8")
+    ext = image_file.filename.rsplit(".", 1)[-1].lower()
+    mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp", "bmp": "image/bmp"}
+    mime = mime_map.get(ext, "image/jpeg")
+    return "data:" + mime + ";base64," + b64, mime
+
+
+def grade_answer(api_key, api_base, model, reference, student_answer=None, image_data=None, is_image=False, max_score=100):
     client = OpenAI(api_key=api_key, base_url=api_base)
-    prompt = build_prompt(reference_answer, student_answer)
-
+    max_score = int(max_score)
+    prompt = (
+        "你是一位教师。请根据参考答案对学生答案进行评分。\n\n"
+        "## 参考答案与评分标准\n\n" + reference
+        + "\n\n## 评分要求\n\n"
+        "- 本题满分: " + str(max_score) + " 分\n"
+        "- score 必须是 0 到 " + str(max_score) + " 之间的整数\n"
+        "- max_score 必须填 " + str(max_score) + "\n\n"
+        "请按 JSON 格式输出：\n"
+        '{"recognized_text":"学生答案","score":3,"max_score":' + str(max_score) + ',"grade":"B+"'
+        ',"summary":"评价","correct_points":["正确"],"wrong_points":["错误"]'
+        ',"suggestions":["建议"],"detailed_comment":"详细评语"}\n\n'
+        "得分率 = score / " + str(max_score) + " * 100%\n"
+        "等级: A+(>=95%),A(>=90%),A-(>=85%),B+(>=80%),B(>=75%),B-(>=70%),C+(>=65%),C(>=60%),F(<60%)"
+    )
     try:
+        if is_image and image_data:
+            content = [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": image_data}},
+            ]
+        elif student_answer:
+            content = prompt + "\n\n## 学生答案\n\n" + student_answer
+        else:
+            return {"success": False, "error": "无内容"}
         response = client.chat.completions.create(
             model=model,
             messages=[
-                {
-                    "role": "system",
-                    "content": "你是一位专业的教师助手，擅长客观公正地批改试卷。请严格按 JSON 格式输出。"
-                },
-                {"role": "user", "content": prompt}
+                {"role": "system", "content": "你是教师助手。严格按指定JSON格式输出，score不超过" + str(max_score) + "。"},
+                {"role": "user", "content": content},
             ],
             temperature=0.3,
-            max_tokens=2000
+            max_tokens=2000,
         )
-
-        content = response.choices[0].message.content.strip()
-        # 去除代码块标记
-        if "```json" in content:
-            content = content.split("```json")[1].split("```")[0].strip()
-        elif "```" in content:
-            content = content.split("```")[1].split("```")[0].strip()
-
-        result = json.loads(content)
-        return {"success": True, "data": result}
-
-    except json.JSONDecodeError as e:
-        return {"success": False, "error": f"AI 返回格式错误: {e}", "raw": content}
+        text = response.choices[0].message.content.strip()
+        if "```json" in text:
+            text = text.split("```json")[1].split("```")[0].strip()
+        elif "```" in text:
+            text = text.split("```")[1].split("```")[0].strip()
+        import json
+        data = json.loads(text)
+        # 强制修正 max_score
+        data["max_score"] = max_score
+        if data.get("score", 0) > max_score:
+            data["score"] = max_score
+        if data.get("score", 0) < 0:
+            data["score"] = 0
+        return {"success": True, "data": data}
     except Exception as e:
         return {"success": False, "error": str(e)}
-
-
-if __name__ == '__main__':
-    qq = build_prompt('刘念大魔王','刘念是呆子')
-    grade_answer()
-    print(qq)

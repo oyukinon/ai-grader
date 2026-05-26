@@ -1,0 +1,322 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI改卷系统o_o</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root{--bg:#f5f0e8;--surface:#fff;--surface-alt:#faf7f2;--accent:#b44a2d;--accent-bg:#fdf0ec;--text:#2c2418;--text-muted:#8a7e6e;--border:#e0d8ca;--border-strong:#c4b8a4;--green:#3a7d44;--green-bg:#edf7ef;--red:#b44a2d;--red-bg:#fdf0ec;--blue:#2d6bb4;--shadow:0 2px 20px rgba(44,36,24,.06);--radius:12px;--radius-sm:8px;--font-display:'Noto Serif SC',serif;--font-mono:'JetBrains Mono',monospace}
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:var(--font-display);background:var(--bg);color:var(--text);min-height:100vh;line-height:1.7}
+        .container{max-width:960px;margin:0 auto;padding:2.5rem 2rem 5rem}
+        header{margin-bottom:1.8rem;padding-bottom:1.5rem;border-bottom:2px solid var(--text)}
+        header h1{font-size:2rem;font-weight:700;margin-bottom:.3rem}
+        header h1 span{color:var(--accent)}
+        header p{color:var(--text-muted);font-size:.88rem}
+        .nav{display:flex;gap:.75rem;margin-bottom:2rem}
+        .nav a{padding:.45rem 1rem;border-radius:var(--radius-sm);font-size:.82rem;font-weight:600;text-decoration:none;border:1.5px solid var(--border-strong);color:var(--text);transition:all .2s}
+        .nav a:hover,.nav a.active{border-color:var(--accent);color:var(--accent);background:var(--accent-bg)}
+        .section{margin-bottom:2rem}
+        .section-label{font-size:.72rem;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.15em;color:var(--accent);margin-bottom:.6rem;font-weight:500}
+        .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.3rem;box-shadow:var(--shadow)}
+        label{display:block;font-size:.82rem;font-weight:600;margin-bottom:.3rem}
+        textarea{width:100%;min-height:120px;padding:.8rem;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:var(--font-display);font-size:.88rem;line-height:1.7;background:var(--surface-alt);color:var(--text);resize:vertical;outline:none}
+        textarea:focus{border-color:var(--accent)}
+        input[type="number"],input[type="text"],input[type="password"]{width:100%;padding:.6rem .8rem;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:.85rem;background:var(--surface-alt);color:var(--text);outline:none}
+        input:focus{border-color:var(--accent)}
+        .form-row{margin-bottom:.8rem}
+        .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem}
+        .form-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.8rem}
+        .form-grid-4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:.8rem}
+        .browser-select{display:flex;gap:.5rem}
+        .browser-opt{flex:1;padding:.6rem;border:1.5px solid var(--border);border-radius:var(--radius-sm);text-align:center;cursor:pointer;transition:all .2s;font-size:.85rem;font-weight:600}
+        .browser-opt:hover{border-color:var(--accent)}
+        .browser-opt.selected{border-color:var(--accent);background:var(--accent-bg);color:var(--accent)}
+        .browser-opt input{display:none}
+        .btn{display:inline-flex;align-items:center;gap:.4rem;padding:.65rem 1.4rem;border:none;border-radius:var(--radius-sm);font-family:var(--font-display);font-size:.88rem;font-weight:600;cursor:pointer;transition:all .2s}
+        .btn-primary{background:var(--text);color:var(--bg)}.btn-primary:hover{background:var(--accent)}.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+        .btn-green{background:var(--green);color:#fff}.btn-green:hover{background:#2d8a36}
+        .btn-blue{background:var(--blue);color:#fff}.btn-blue:hover{background:#2456a0}
+        .btn-red{background:transparent;color:var(--red);border:1.5px solid var(--red)}.btn-red:hover{background:var(--red-bg)}
+        .btn-sm{padding:.4rem .8rem;font-size:.78rem}
+        .btn-group{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.8rem}
+        .spinner{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .6s linear infinite}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .progress-bar{width:100%;height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+        .progress-fill{height:100%;background:var(--accent);border-radius:3px;width:0%;transition:width .5s ease}
+        .status-box{background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius-sm);padding:.8rem 1rem;font-size:.88rem;min-height:2em}
+        .status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:.4rem;vertical-align:middle}
+        .dot-green{background:var(--green)}.dot-yellow{background:#d4a72d}.dot-red{background:var(--red);animation:pulse 1s infinite}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+        .steps{display:flex;gap:0;margin-bottom:1rem}
+        .step{flex:1;padding:.5rem .3rem;text-align:center;font-size:.72rem;font-family:var(--font-mono);border-bottom:3px solid var(--border);color:var(--text-muted);transition:all .3s;white-space:nowrap}
+        .step.active{border-color:var(--accent);color:var(--accent);font-weight:600}
+        .step.done{border-color:var(--green);color:var(--green)}
+        .browser-frame{position:relative;width:100%;background:#1a1a1a;border-radius:var(--radius);overflow:hidden;box-shadow:0 4px 30px rgba(0,0,0,.15)}
+        .browser-toolbar{display:flex;align-items:center;gap:.5rem;padding:.5rem .8rem;background:#2a2a2a;border-bottom:1px solid #333}
+        .browser-toolbar .dots{display:flex;gap:.3rem}
+        .browser-toolbar .dots span{width:10px;height:10px;border-radius:50%}
+        .browser-toolbar .dots span:nth-child(1){background:#ff5f57}
+        .browser-toolbar .dots span:nth-child(2){background:#febc2e}
+        .browser-toolbar .dots span:nth-child(3){background:#28c840}
+        .browser-toolbar input{flex:1;padding:.3rem .6rem;border:1px solid #444;border-radius:4px;background:#1a1a1a;color:#ccc;font-family:var(--font-mono);font-size:.75rem;outline:none}
+        .browser-viewport{position:relative;cursor:crosshair;overflow:hidden;background:#111;min-height:200px}
+        .browser-viewport img{width:100%;height:auto;display:block}
+        .browser-viewport .placeholder{padding:4rem;text-align:center;color:#666;font-size:.85rem}
+        .click-marker{position:absolute;width:20px;height:20px;border:2px solid var(--accent);border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;animation:clickPulse .5s ease-out forwards}
+        @keyframes clickPulse{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(2)}}
+        .browser-controls{display:flex;gap:.4rem;padding:.5rem .8rem;background:#2a2a2a;border-top:1px solid #333;flex-wrap:wrap;align-items:center}
+        .browser-controls .btn{padding:.35rem .7rem;font-size:.72rem;border-radius:4px}
+        .keyboard-bar{display:flex;gap:.3rem;padding:.5rem .8rem;background:#222;border-top:1px solid #333;flex-wrap:wrap;align-items:center}
+        .keyboard-bar .btn{padding:.3rem .6rem;font-size:.68rem;border-radius:3px;background:#333;color:#ccc;border:1px solid #444}
+        .keyboard-bar .btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+        .keyboard-bar input{flex:1;min-width:120px;padding:.35rem .6rem;border:1px solid #444;border-radius:4px;background:#1a1a1a;color:#ccc;font-family:var(--font-mono);font-size:.72rem;outline:none}
+        .log-box{max-height:150px;overflow-y:auto;font-family:var(--font-mono);font-size:.75rem;color:var(--text-muted);background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius-sm);padding:.6rem;margin-top:.6rem}
+        .log-line{padding:.15rem 0;border-bottom:1px solid rgba(0,0,0,.04)}
+        .collapse-toggle{font-size:.78rem;color:var(--text-muted);cursor:pointer;margin-bottom:.3rem;font-family:var(--font-mono)}
+        .collapse-toggle:hover{color:var(--accent)}
+        .progress-detail{display:flex;justify-content:space-between;font-size:.78rem;font-family:var(--font-mono);margin-top:.3rem;padding:.4rem .6rem;background:var(--surface-alt);border-radius:var(--radius-sm)}
+        .progress-detail .done{color:var(--green)}
+        .progress-detail .total{color:var(--accent);font-weight:600}
+        .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.8rem;margin-bottom:1.2rem}
+        .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:.8rem;text-align:center}
+        .stat-value{font-size:1.4rem;font-weight:700;line-height:1;margin-bottom:.15rem}
+        .stat-label{font-size:.65rem;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted)}
+        .result-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:.8rem;overflow:hidden;opacity:0;animation:fadeUp .3s ease forwards}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+        .result-header{display:flex;justify-content:space-between;align-items:center;padding:.8rem 1rem;cursor:pointer}
+        .result-header:hover{background:var(--surface-alt)}
+        .badge{padding:.15rem .5rem;border-radius:20px;font-size:.72rem;font-family:var(--font-mono);font-weight:500}
+        .badge-score{background:var(--accent-bg);color:var(--accent)}.badge-grade{background:var(--text);color:var(--bg)}.badge-error{background:var(--red-bg);color:var(--red)}
+        .result-body{padding:0 1rem 1rem;display:none;font-size:.85rem}.result-body.open{display:block}
+        @media(max-width:640px){.container{padding:1.5rem 1rem 3rem}header h1{font-size:1.5rem}.stats{grid-template-columns:1fr}.form-grid,.form-grid-3,.form-grid-4{grid-template-columns:1fr}}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>AI改卷系统<span>o_o</span></h1>
+            <p>自助阅卷系统 - 直接在网页中控制浏览器</p>
+        </header>
+        <div class="nav">
+            <a href="/">手动改卷</a>
+            <a href="/auto" class="active">自动阅卷（智学网）</a>
+        </div>
+        <div class="steps">
+            <div class="step" id="st1">配置</div>
+            <div class="step" id="st2">登录</div>
+            <div class="step" id="st3">阅卷页</div>
+            <div class="step" id="st4">批改</div>
+            <div class="step" id="st5">完成</div>
+        </div>
+
+        <!-- API 配置 -->
+        <div class="section">
+            <div class="section-label">API 配置</div>
+            <div class="card">
+                <div class="form-grid-3">
+                    <div class="form-row"><label>API Key</label><input type="password" id="apiKey" placeholder="填写你的 API Key"></div>
+                    <div class="form-row"><label>API 地址</label><input type="text" id="apiBase" placeholder="https://ark.cn-beijing.volces.com/api/v3"></div>
+                    <div class="form-row"><label>模型名称</label><input type="text" id="modelName" placeholder="doubao-seed-2-0-lite"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 批改配置 -->
+        <div class="section">
+            <div class="section-label">批改配置</div>
+            <div class="card">
+                <div class="form-row"><label>参考答案与评分标准</label><textarea id="reference" placeholder="输入标准答案和评分标准..."></textarea></div>
+                <div class="form-grid-4">
+                    <div class="form-row"><label>满分</label><input type="number" id="maxScore" value="4" min="1" max="1000"></div>
+                    <div class="form-row"><label>批改份数</label><input type="number" id="count" value="10" min="1" max="500"></div>
+                    <div class="form-row"><label>浏览器</label>
+                        <div class="browser-select">
+                            <label class="browser-opt selected" onclick="pickBrowser(this)"><input type="radio" name="browser" value="chrome" checked>Chrome</label>
+                            <label class="browser-opt" onclick="pickBrowser(this)"><input type="radio" name="browser" value="edge">Edge</label>
+                        </div>
+                    </div>
+                    <div class="form-row" style="display:flex;align-items:end;">
+                        <div class="btn-group" style="margin-top:0;width:100%;">
+                            <button class="btn btn-primary" id="startBtn" onclick="startGrading()" style="width:100%;">开始自动阅卷</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="btn-group" style="margin-top:0;">
+                    <button class="btn btn-red" id="stopBtn" onclick="stopGrading()" style="display:none;">停止</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 内嵌浏览器 -->
+        <div class="section" id="browserSection" style="display:none;">
+            <div class="section-label">浏览器控制台（点击画面操作智学网）</div>
+            <div class="browser-frame">
+                <div class="browser-toolbar">
+                    <div class="dots"><span></span><span></span><span></span></div>
+                    <input type="text" id="urlBar" placeholder="输入网址回车导航" onkeydown="if(event.key==='Enter')navTo(this.value)">
+                    <button class="btn btn-sm" style="background:#444;color:#ccc;" onclick="goBack()">← 后退</button>
+                </div>
+                <div class="browser-viewport" id="viewport" onclick="handleClick(event)">
+                    <div class="placeholder" id="livePlaceholder">浏览器启动后将在此显示</div>
+                    <img id="liveImg" style="display:none;" alt="实时画面">
+                </div>
+                <div class="browser-controls">
+                    <button class="btn btn-green" id="loginBtn" onclick="confirmLogin()" style="display:none;">已登录</button>
+                    <button class="btn btn-blue" id="readyBtn" onclick="confirmReady()" style="display:none;">页面就绪</button>
+                    <div style="flex:1"></div>
+                    <button class="btn btn-sm" style="background:#333;color:#ccc;" onclick="scrollB('up')">↑ 上滚</button>
+                    <button class="btn btn-sm" style="background:#333;color:#ccc;" onclick="scrollB('down')">↓ 下滚</button>
+                </div>
+                <div class="keyboard-bar">
+                    <button class="btn" onclick="sendKey('enter')">Enter</button>
+                    <button class="btn" onclick="sendKey('tab')">Tab</button>
+                    <button class="btn" onclick="sendKey('backspace')">Back</button>
+                    <button class="btn" onclick="sendKey('escape')">Esc</button>
+                    <button class="btn" onclick="sendKey('space')">Space</button>
+                    <input type="text" id="typeInput" placeholder="输入文字回车发送" onkeydown="if(event.key==='Enter'){sendType(this.value);this.value=''}">
+                </div>
+            </div>
+        </div>
+
+        <!-- 状态 -->
+        <div class="section" id="controlSection" style="display:none;">
+            <div class="section-label">实时状态</div>
+            <div class="card">
+                <div class="status-box" id="statusBox"><span class="status-dot dot-yellow"></span>等待开始...</div>
+                <div class="progress-detail" id="progressDetail" style="display:none;">
+                    <span>进度: <span class="done" id="pDone">0</span> / <span class="total" id="pTotal">0</span></span>
+                    <span>满分: <span id="pMax">100</span>分</span>
+                    <span id="pPercent">0%</span>
+                </div>
+                <div style="margin-top:.6rem;">
+                    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+                </div>
+                <div class="collapse-toggle" onclick="toggleLog()">展开/收起日志</div>
+                <div class="log-box" id="logBox" style="display:none;"></div>
+            </div>
+        </div>
+
+        <!-- 结果 -->
+        <div id="resultsSection" style="display:none;">
+            <div class="section">
+                <div class="section-label">批改结果</div>
+                <div class="stats" id="stats"></div>
+                <div id="results"></div>
+            </div>
+        </div>
+    </div>
+
+<script>
+var pollTimer=null,imgPollTimer=null,logLines=[],curMaxScore=100;
+
+function pickBrowser(el){document.querySelectorAll('.browser-opt').forEach(function(e){e.classList.remove('selected')});el.classList.add('selected');el.querySelector('input').checked=true}
+function toggleLog(){var b=document.getElementById('logBox');b.style.display=b.style.display==='none'?'block':'none'}
+
+function startGrading(){
+    var apiKey=document.getElementById('apiKey').value.trim();
+    var apiBase=document.getElementById('apiBase').value.trim();
+    var model=document.getElementById('modelName').value.trim();
+    var ref=document.getElementById('reference').value.trim();
+    var ms=parseInt(document.getElementById('maxScore').value)||100;
+    var cnt=parseInt(document.getElementById('count').value);
+    var br=document.querySelector('input[name="browser"]:checked').value;
+    if(!apiKey){alert('请填写 API Key');return}
+    if(!apiBase){alert('请填写 API 地址');return}
+    if(!model){alert('请填写模型名称');return}
+    if(!ref){alert('请填写参考答案');return}
+    if(!cnt||cnt<1){alert('请输入批改份数');return}
+    curMaxScore=ms;
+    document.getElementById('startBtn').disabled=true;
+    document.getElementById('startBtn').innerHTML='<span class="spinner"></span> 启动中...';
+    document.getElementById('stopBtn').style.display='inline-flex';
+    document.getElementById('controlSection').style.display='block';
+    document.getElementById('browserSection').style.display='block';
+    document.getElementById('logBox').style.display='block';
+    document.getElementById('progressDetail').style.display='flex';
+    document.getElementById('pTotal').textContent=cnt;
+    document.getElementById('pMax').textContent=ms;
+    logLines=[];addLog('正在启动（满分'+ms+'分，共'+cnt+'份）...');
+    fetch('/api/auto/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reference:ref,count:cnt,browser:br,api_key:apiKey,api_base:apiBase,model:model,max_score:ms})}).then(function(r){return r.json()}).then(function(d){if(d.error){alert(d.error);resetBtn();return}pollTimer=setInterval(pollStatus,1500);imgPollTimer=setInterval(pollScreenshot,800)}).catch(function(e){alert('启动失败: '+e.message);resetBtn()});
+}
+function resetBtn(){document.getElementById('startBtn').disabled=false;document.getElementById('startBtn').innerHTML='开始自动阅卷';document.getElementById('stopBtn').style.display='none'}
+
+function pollStatus(){fetch('/api/auto/status').then(function(r){return r.json()}).then(function(s){updateUI(s);if(s.message)addLog(s.message);if(s.status==='finished'||s.status==='error'||s.status==='idle'||s.status==='stopped'){clearInterval(pollTimer);clearInterval(imgPollTimer);resetBtn();if(s.status==='finished'||(s.results&&s.results.length>0)){renderResults(s.results||[]);setStep(5)}}})}
+function pollScreenshot(){fetch('/api/auto/screenshot').then(function(r){return r.json()}).then(function(d){if(d.image){document.getElementById('livePlaceholder').style.display='none';var img=document.getElementById('liveImg');img.style.display='block';img.src=d.image}})}
+
+function updateUI(s){
+    document.getElementById('statusBox').innerHTML='<span class="status-dot '+dotClass(s.status)+'"></span>'+(s.message||'...');
+    var idx={starting:1,login_waiting:2,auto_login_detected:2,login_confirmed:2,page_waiting:3,page_confirmed:3,detecting:4,running:4,finished:5,error:5,idle:0,stopped:5}[s.status]||0;
+    for(var i=1;i<=5;i++){var el=document.getElementById('st'+i);if(i<idx)el.className='step done';else if(i===idx)el.className='step active';else el.className='step'}
+    var lb=document.getElementById('loginBtn'),rb=document.getElementById('readyBtn');
+    lb.style.display='none';rb.style.display='none';
+    if(s.status==='login_waiting'||s.status==='auto_login_detected'){lb.style.display='inline-flex';lb.disabled=false;lb.innerHTML='已登录'}
+    else if(s.status==='page_waiting'){rb.style.display='inline-flex';rb.disabled=false;rb.innerHTML='页面就绪'}
+    if(s.total>0){
+        var pct=Math.round((s.progress/s.total)*100);
+        document.getElementById('progressFill').style.width=pct+'%';
+        document.getElementById('pDone').textContent=s.progress;
+        document.getElementById('pTotal').textContent=s.total;
+        document.getElementById('pPercent').textContent=pct+'%';
+    }
+    if(s.max_score){curMaxScore=s.max_score;document.getElementById('pMax').textContent=s.max_score}
+    if(s.results&&s.results.length>0)renderResults(s.results);
+}
+
+function dotClass(st){if(st==='finished')return 'dot-green';if(st==='error'||st==='stopped')return 'dot-red';return 'dot-yellow'}
+function setStep(n){for(var i=1;i<=5;i++){var el=document.getElementById('st'+i);if(i<n)el.className='step done';else if(i===n)el.className='step active';else el.className='step'}}
+function addLog(msg){var t=new Date().toLocaleTimeString();logLines.push('['+t+'] '+msg);if(logLines.length>100)logLines=logLines.slice(-50);var box=document.getElementById('logBox');box.innerHTML=logLines.map(function(l){return '<div class="log-line">'+l+'</div>'}).join('');box.scrollTop=box.scrollHeight}
+
+function confirmLogin(){fetch('/api/auto/confirm-login',{method:'POST'});document.getElementById('loginBtn').disabled=true;document.getElementById('loginBtn').textContent='已确认';addLog('已确认登录')}
+function confirmReady(){fetch('/api/auto/confirm-ready',{method:'POST'});document.getElementById('readyBtn').disabled=true;document.getElementById('readyBtn').textContent='已确认';addLog('已确认页面就绪')}
+function stopGrading(){fetch('/api/auto/stop',{method:'POST'}).then(function(){document.getElementById('stopBtn').style.display='none';addLog('已停止')})}
+
+function remotePost(url,data){return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})}
+
+function handleClick(e){
+    var viewport=document.getElementById('viewport');
+    var img=document.getElementById('liveImg');
+    if(!img.src||img.style.display==='none')return;
+    var rect=viewport.getBoundingClientRect();
+    var clickX=e.clientX-rect.left+viewport.scrollLeft;
+    var clickY=e.clientY-rect.top+viewport.scrollTop;
+    var imgRect=img.getBoundingClientRect();
+    var scaleX=img.naturalWidth/imgRect.width;
+    var scaleY=img.naturalHeight/imgRect.height;
+    var marker=document.createElement('div');
+    marker.className='click-marker';
+    marker.style.left=(e.clientX-rect.left)+'px';
+    marker.style.top=(e.clientY-rect.top)+'px';
+    viewport.appendChild(marker);
+    setTimeout(function(){marker.remove()},600);
+    var bx=Math.round(clickX*scaleX),by=Math.round(clickY*scaleY);
+    remotePost('/api/remote/click',{x:bx,y:by});
+    addLog('点击: ('+bx+','+by+')');
+}
+function sendType(text){if(!text.trim())return;remotePost('/api/remote/type',{text:text});addLog('输入: '+text)}
+function sendKey(key){remotePost('/api/remote/key',{key:key});addLog('按键: '+key)}
+function scrollB(dir){remotePost('/api/remote/scroll',{direction:dir,amount:300});addLog('滚动: '+dir)}
+function navTo(url){remotePost('/api/remote/navigate',{url:url});addLog('导航: '+url)}
+function goBack(){remotePost('/api/remote/back',{});addLog('后退')}
+
+function renderResults(results){
+    var sec=document.getElementById('resultsSection');sec.style.display='block';
+    var sd=document.getElementById('stats'),rd=document.getElementById('results');
+    var ok=results.filter(function(r){return r.success});
+    var avg=ok.length>0?Math.round(ok.reduce(function(s,r){return s+(r.data.score||0)},0)/ok.length):0;
+    var mx=ok.length>0?Math.max.apply(null,ok.map(function(r){return r.data.score||0})):0;
+    var mn=ok.length>0?Math.min.apply(null,ok.map(function(r){return r.data.score||0})):0;
+    sd.innerHTML='<div class="stat-card"><div class="stat-value" style="color:var(--accent)">'+avg+'</div><div class="stat-label">平均分/'+curMaxScore+'</div></div><div class="stat-card"><div class="stat-value" style="color:var(--green)">'+mx+'</div><div class="stat-label">最高分/'+curMaxScore+'</div></div><div class="stat-card"><div class="stat-value" style="color:var(--red)">'+mn+'</div><div class="stat-label">最低分/'+curMaxScore+'</div></div>';
+    rd.innerHTML='';
+    for(var i=0;i<results.length;i++){
+        var r=results[i],id='ar-'+i;
+        if(!r.success){rd.innerHTML+='<div class="result-card" style="border-color:var(--red)"><div class="result-header"><span>'+r.student+'</span><span class="badge badge-error">失败: '+r.error+'</span></div></div>';continue}
+        var d=r.data;
+        rd.innerHTML+='<div class="result-card"><div class="result-header" onclick="document.getElementById(\''+id+'\').classList.toggle(\'open\')"><span>'+r.student+'</span><div style="display:flex;gap:.4rem;align-items:center"><span class="badge badge-score">'+d.score+'/'+(d.max_score||curMaxScore)+'</span><span class="badge badge-grade">'+d.grade+'</span><span style="font-size:.65rem;color:var(--text-muted)">v</span></div></div><div class="result-body" id="'+id+'"><div style="margin-bottom:.4rem"><b>识别:</b> '+(d.recognized_text||'')+'</div><div style="margin-bottom:.4rem"><b>评价:</b> '+(d.summary||'')+'</div><div><b>评语:</b> '+(d.detailed_comment||'')+'</div></div></div>';
+    }
+}
+</script>
+</body>
+</html>

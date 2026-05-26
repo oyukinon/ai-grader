@@ -1,22 +1,29 @@
-﻿# Python
+﻿# 浏览器 profile
+chrome_profile/
+edge_profile/
+
+# 截图
+screenshots/
+
+# Python
 __pycache__/
 *.pyc
 *.pyo
-venv/
-env/
-.venv/
-
-# 上传的文件
-uploads/*
-!uploads/.gitignore
-
-# 敏感配置
-config_local.py
+*.pyd
+.Python
 
 # IDE
 .vscode/
 .idea/
 
 # 系统文件
-.DS_Store
 Thumbs.db
+Desktop.ini
+.DS_Store
+
+# 日志
+*.log
+
+# 环境
+.env
+venv/

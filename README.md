@@ -1,76 +1,124 @@
-﻿# 📝 AI 智能改卷系统
+﻿markdown
+markdown
+# AI 改卷系统 o_o
 
-一个基于 AI 的自动改卷工具，帮助教师快速批改学生作业和考试答案。
+基于多模态大模型的智能阅卷系统，支持手动改卷和智学网自动阅卷。
 
-## ✨ 功能特点
+## 功能特性
 
-- 📤 批量上传学生答案文件（支持 `.txt` 和 `.md` 格式）
-- 🎯 教师提供参考答案和评分标准
-- 🤖 AI 自动评分 + 详细批改意见
-- 📊 结果导出为 CSV 表格
-- 🌐 简洁美观的 Web 界面
+### 手动改卷
+- 上传学生答案文件（文本或图片）
+- AI 自动评分，输出等级、评语、正确/错误要点
+- 批量导出 CSV 成绩表
 
-## 🚀 快速开始
+### 自动阅卷（智学网）
+- 控制浏览器自动打开智学网
+- 内嵌浏览器控制台，直接在网页中操作智学网（点击、输入、滚动）
+- 实时画面同步（每 0.8 秒刷新）
+- AI 识别答题卡图片并评分
+- 自动填入分数并提交
+- 支持账号密码登录和扫码登录
+- 支持 Chrome 和 Edge 浏览器
 
-### 1. 安装 Python
+## 快速开始
 
-前往 [python.org](https://www.python.org/downloads/) 下载并安装 Python 3.9 或更高版本。
+### 环境要求
+- Python 3.10+
+- Chrome 或 Edge 浏览器
+- ChromeDriver 或 EdgeDriver（放在项目根目录）
 
-> ⚠️ 安装时务必勾选 **"Add Python to PATH"** 选项！
-
-### 2. 下载本项目
+### 安装依赖
 
 ```bash
-git clone https://github.com/你的用户名/ai-grader.git
-cd ai-grader
-或者直接在 GitHub 页面点击 Code → Download ZIP，解压后进入文件夹。
+pip install flask openai selenium Pillow -i https://pypi.tuna.tsinghua.edu.cn/simple
 
-3. 安装依赖
-bash
-pip install -r requirements.txt
+配置 API
 
-4. 配置 API Key
-
-打开 config.py，将你的 API Key 填入：
+编辑 config.py：
 
 
 python
 python
-API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxx"
-API_BASE = "https://api.openai.com/v1"
-MODEL = "gpt-4o"
+API_KEY = "你的 API Key"
+API_BASE = "https://api.deepseek.com"  # 或其他兼容 OpenAI 接口的服务
+MODEL = "deepseek-chat"                # 或其他支持图片识别的模型
 
-5. 运行
+也可以在网页端的「自动阅卷」页面中直接填写 API 配置。
+
+
+启动
 
 bash
 bash
 python app.py
 
-打开浏览器访问 http://127.0.0.1:5000 即可使用。
+访问 
+http://127.0.0.1:5000
+ （手动改卷）或 
+http://127.0.0.1:5000/auto
+ （自动阅卷）。
 
 
-📖 使用说明
+使用流程
 
-1.在页面顶部填入 API Key（如已在 config.py 中配置则可跳过）
-2.在「参考答案」框中粘贴标准答案和评分标准
-3.上传一个或多个学生答案文件
+手动改卷
+1.填写 API 配置（API Key、API 地址、模型名称）
+2.输入参考答案与评分标准
+3.上传学生答案文件（支持 txt、jpg、png 等）
 4.点击「开始批改」
-5.查看结果，点击「导出 CSV」保存成绩表
+5.查看结果，导出 CSV
 
-📁 文件格式要求
+自动阅卷
+1.填写 API 配置
+2.输入参考答案与评分标准
+3.设置满分分值和批改份数
+4.点击「开始自动阅卷」
+5.在内嵌浏览器控制台中操作智学网登录
+6.点击「已登录」→ 进入阅卷页面 → 点击「页面就绪」
+7.系统自动截图 → AI 识别评分 → 填分 → 提交 → 下一份
 
-学生答案文件请使用 .txt 格式，每个文件代表一个学生的答案。
+项目结构
+
+text
+text
+ai-grader/
+├── app.py              # Flask 主程序
+├── config.py           # API 配置
+├── grader.py           # 手动改卷评分模块
+├── auto_grader.py      # 自动阅卷模块（远程控制 + AI 评分）
+├── browser_manager.py  # 浏览器管理（启动/关闭/最大化）
+├── element_finder.py   # 页面元素定位（评分框/提交按钮）
+├── templates/
+│   ├── index.html      # 手动改卷页面
+│   └── auto.html       # 自动阅卷页面（含内嵌浏览器控制台）
+├── screenshots/        # 截图存储目录
+├── chrome_profile/     # Chrome 用户数据目录
+└── edge_profile/       # Edge 用户数据目录
+
+支持的 AI 模型
+
+系统使用 OpenAI 兼容接口，支持以下模型：
 
 
-文件名即为学生姓名，例如：
+模型	说明
+豆包 (doubao)	字节跳动，支持图片识别
+DeepSeek	支持图片识别（需使用对应版本）
+其他 OpenAI 兼容模型	任何支持 chat/completions 接口的模型
 
-张三.txt
-李四.txt
-
-⚙️ 技术栈
-
-后端: Python Flask
-前端: HTML + CSS + JavaScript
-AI: OpenAI GPT-4o API（可替换为其他兼容 API）
+注意：模型必须支持图片（多模态）识别，否则无法识别答题卡图片。
 
 
+常见问题
+
+Edge/Chrome 启动失败
+关闭所有使用相同 profile 的浏览器窗口后重试。系统会自动清理残留进程。
+
+
+元素定位失败
+点击「页面就绪」前，请确保已进入具体的批改界面（能看到答题卡图片和评分区域）。
+
+
+AI 评分不准确
+检查参考答案是否完整
+调整评分标准描述
+确保答题卡图片清晰
