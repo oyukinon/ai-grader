@@ -28,22 +28,22 @@ markdown
 - ChromeDriver 或 EdgeDriver（放在项目根目录）
 
 ### 安装启动
-1.启动（win+r打开运行：输入“cmd”，回车键确认，复制以下指令并回车确认）
+##1.启动（win+r打开运行：输入“cmd”，回车键确认，复制以下指令并回车确认）
 ```bash
 pip install flask openai selenium Pillow -i https://pypi.tuna.tsinghua.edu.cn/simple
 
-2.输入指令如下(记得更换您的文件地址)：
+##2.输入指令如下(记得更换您的文件地址)：
 cd C:\Users\Start\Desktop\ai-grader
 python app.py
 
-3.接下来打开网页，访问 
+##3.接下来打开网页，访问 
 http://127.0.0.1:5000
  （手动改卷）或 
 http://127.0.0.1:5000/auto
  （建议选这个自动阅卷）。
 
 
-使用流程
+###使用流程
 
 
 自动阅卷
@@ -55,7 +55,7 @@ http://127.0.0.1:5000/auto
 6.点击「已登录」→ 进入阅卷页面 → 点击「页面就绪」
 7.系统自动截图 → AI 识别评分 → 填分 → 提交 → 下一份
 
-项目结构
+###项目结构
 
 text
 text
@@ -73,7 +73,7 @@ ai-grader/
 ├── chrome_profile/     # Chrome 用户数据目录
 └── edge_profile/       # Edge 用户数据目录
 
-支持的 AI 模型
+###支持的 AI 模型
 
 系统使用 OpenAI 兼容接口，支持以下模型：
 
@@ -86,7 +86,7 @@ DeepSeek	4.0暂不支持图片识别（需等新版本）
 注意：模型必须支持图片（多模态）识别，否则无法识别答题卡图片。
 
 
-常见问题
+###常见问题
 
 Edge/Chrome 启动失败
 关闭您在这些操作之前运行的智学网窗口，然后重试。系统会自动清理残留进程。
