@@ -27,46 +27,24 @@ markdown
 - Chrome 或 Edge 浏览器
 - ChromeDriver 或 EdgeDriver（放在项目根目录）
 
-### 安装依赖
-
+### 安装启动
+1.启动（win+r打开运行：输入“cmd”，回车键确认，复制以下指令并回车确认）
 ```bash
 pip install flask openai selenium Pillow -i https://pypi.tuna.tsinghua.edu.cn/simple
 
-配置 API
-
-编辑 config.py：
-
-
-python
-python
-API_KEY = "你的 API Key"
-API_BASE = "https://api.deepseek.com"  # 或其他兼容 OpenAI 接口的服务
-MODEL = "deepseek-chat"                # 或其他支持图片识别的模型
-
-也可以在网页端的「自动阅卷」页面中直接填写 API 配置。
-
-
-启动
-
-bash
-bash
+2.输入指令如下(记得更换您的文件地址)：
+cd C:\Users\Start\Desktop\ai-grader
 python app.py
 
-访问 
+3.接下来打开网页，访问 
 http://127.0.0.1:5000
  （手动改卷）或 
 http://127.0.0.1:5000/auto
- （自动阅卷）。
+ （建议选这个自动阅卷）。
 
 
 使用流程
 
-手动改卷
-1.填写 API 配置（API Key、API 地址、模型名称）
-2.输入参考答案与评分标准
-3.上传学生答案文件（支持 txt、jpg、png 等）
-4.点击「开始批改」
-5.查看结果，导出 CSV
 
 自动阅卷
 1.填写 API 配置
@@ -102,7 +80,7 @@ ai-grader/
 
 模型	说明
 豆包 (doubao)	字节跳动，支持图片识别
-DeepSeek	支持图片识别（需使用对应版本）
+DeepSeek	4.0暂不支持图片识别（需等新版本）
 其他 OpenAI 兼容模型	任何支持 chat/completions 接口的模型
 
 注意：模型必须支持图片（多模态）识别，否则无法识别答题卡图片。
@@ -111,7 +89,7 @@ DeepSeek	支持图片识别（需使用对应版本）
 常见问题
 
 Edge/Chrome 启动失败
-关闭所有使用相同 profile 的浏览器窗口后重试。系统会自动清理残留进程。
+关闭您在这些操作之前运行的智学网窗口，然后重试。系统会自动清理残留进程。
 
 
 元素定位失败
