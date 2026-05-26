@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -51,7 +51,7 @@
         .dot-green{background:var(--green)}.dot-yellow{background:#d4a72d}.dot-red{background:var(--red);animation:pulse 1s infinite}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
         .steps{display:flex;gap:0;margin-bottom:1rem}
-        .step{flex:1;padding:.5rem .3rem;text-align:center;font-size:.72rem;font-family:var(--font-mono);border-bottom:3px solid var(--border);color:var(--text-muted);transition:all .3s;white-space:nowrap}
+        .step{flex:1;padding:.5rem .3rem;text-align:center;font-size:.72rem;font-family:var(--font-mono);border-bottom:3px solid var(--border);color:var(--text-muted);transition:all .3s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         .step.active{border-color:var(--accent);color:var(--accent);font-weight:600}
         .step.done{border-color:var(--green);color:var(--green)}
         .browser-frame{position:relative;width:100%;background:#1a1a1a;border-radius:var(--radius);overflow:hidden;box-shadow:0 4px 30px rgba(0,0,0,.15)}
@@ -67,6 +67,14 @@
         .browser-viewport .placeholder{padding:4rem;text-align:center;color:#666;font-size:.85rem}
         .click-marker{position:absolute;width:20px;height:20px;border:2px solid var(--accent);border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;animation:clickPulse .5s ease-out forwards}
         @keyframes clickPulse{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(2)}}
+        .persistent-marker{position:absolute;pointer-events:none;z-index:10}
+        .persistent-marker .pm-cross{position:absolute;width:24px;height:24px;transform:translate(-50%,-50%)}
+        .persistent-marker .pm-cross::before,.persistent-marker .pm-cross::after{content:'';position:absolute;background:var(--accent)}
+        .persistent-marker .pm-cross::before{width:2px;height:24px;left:11px;top:0}
+        .persistent-marker .pm-cross::after{width:24px;height:2px;top:11px;left:0}
+        .persistent-marker .pm-ring{position:absolute;width:28px;height:28px;border:2px solid var(--accent);border-radius:50%;transform:translate(-50%,-50%);animation:pmPulse 1.5s ease-in-out infinite}
+        @keyframes pmPulse{0%,100%{opacity:1;transform:translate(-50%,-50%) scale(1)}50%{opacity:.5;transform:translate(-50%,-50%) scale(1.2)}}
+        .persistent-marker .pm-label{position:absolute;top:-22px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;font-size:10px;font-family:var(--font-mono);padding:1px 6px;border-radius:3px;white-space:nowrap}
         .browser-controls{display:flex;gap:.4rem;padding:.5rem .8rem;background:#2a2a2a;border-top:1px solid #333;flex-wrap:wrap;align-items:center}
         .browser-controls .btn{padding:.35rem .7rem;font-size:.72rem;border-radius:4px}
         .keyboard-bar{display:flex;gap:.3rem;padding:.5rem .8rem;background:#222;border-top:1px solid #333;flex-wrap:wrap;align-items:center}
@@ -108,8 +116,9 @@
             <div class="step" id="st1">配置</div>
             <div class="step" id="st2">登录</div>
             <div class="step" id="st3">阅卷页</div>
-            <div class="step" id="st4">批改</div>
-            <div class="step" id="st5">完成</div>
+            <div class="step" id="st4">定位</div>
+            <div class="step" id="st5">批改</div>
+            <div class="step" id="st6">完成</div>
         </div>
 
         <!-- API 配置 -->
@@ -138,6 +147,12 @@
                             <label class="browser-opt" onclick="pickBrowser(this)"><input type="radio" name="browser" value="edge">Edge</label>
                         </div>
                     </div>
+                    <div class="form-row"><label>定位方式</label>
+                        <div class="browser-select">
+                            <label class="browser-opt selected" onclick="pickLocate(this)"><input type="radio" name="locate" value="auto" checked>自动检测</label>
+                            <label class="browser-opt" onclick="pickLocate(this)"><input type="radio" name="locate" value="manual">手动标记</label>
+                        </div>
+                    </div>
                     <div class="form-row" style="display:flex;align-items:end;">
                         <div class="btn-group" style="margin-top:0;width:100%;">
                             <button class="btn btn-primary" id="startBtn" onclick="startGrading()" style="width:100%;">开始自动阅卷</button>
@@ -159,14 +174,16 @@
                     <input type="text" id="urlBar" placeholder="输入网址回车导航" onkeydown="if(event.key==='Enter')navTo(this.value)">
                     <button class="btn btn-sm" style="background:#444;color:#ccc;" onclick="goBack()">← 后退</button>
                 </div>
-                <div class="browser-viewport" id="viewport" onclick="handleClick(event)">
+                <div class="browser-viewport" id="viewport" onmousedown="handleMouseDown(event)" onmouseup="handleMouseUp(event)" style="cursor:crosshair;">
                     <div class="placeholder" id="livePlaceholder">浏览器启动后将在此显示</div>
                     <img id="liveImg" style="display:none;" alt="实时画面">
                 </div>
+                <div id="loginHint" style="display:none;padding:.4rem .8rem;background:#2a2a2a;border-top:1px solid #333;font-size:.72rem;color:#d4a72d;text-align:center;">验证码请直接在浏览器窗口中操作（此画面有延迟）</div>
                 <div class="browser-controls">
                     <button class="btn btn-green" id="loginBtn" onclick="confirmLogin()" style="display:none;">已登录</button>
                     <button class="btn btn-blue" id="readyBtn" onclick="confirmReady()" style="display:none;">页面就绪</button>
                     <div style="flex:1"></div>
+                    <button class="btn btn-sm" style="background:#333;color:#ccc;" onclick="forceScreenshot()">刷新画面</button>
                     <button class="btn btn-sm" style="background:#333;color:#ccc;" onclick="scrollB('up')">↑ 上滚</button>
                     <button class="btn btn-sm" style="background:#333;color:#ccc;" onclick="scrollB('down')">↓ 下滚</button>
                 </div>
@@ -194,8 +211,38 @@
                 <div style="margin-top:.6rem;">
                     <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
                 </div>
+                <div class="collapse-toggle" onclick="toggleRef()" id="refToggle" style="display:none;">展开/收起批改标准</div>
+                <div id="refEditBox" style="display:none;margin-top:.4rem;">
+                    <textarea id="refEdit" style="min-height:80px;font-size:.82rem;" placeholder="修改批改标准..."></textarea>
+                    <div style="display:flex;gap:.5rem;margin-top:.4rem;align-items:center;">
+                        <button class="btn btn-green btn-sm" onclick="saveReference()">保存更新</button>
+                        <span id="refSaveStatus" style="font-size:.75rem;color:var(--green);"></span>
+                    </div>
+                </div>
                 <div class="collapse-toggle" onclick="toggleLog()">展开/收起日志</div>
                 <div class="log-box" id="logBox" style="display:none;"></div>
+            </div>
+        </div>
+
+        <!-- 定位确认区域 -->
+        <div class="section" id="locateSection" style="display:none;">
+            <div class="section-label" id="locateLabel">元素定位</div>
+            <div class="card">
+                <div id="locateAuto" style="display:none;">
+                    <div style="font-size:.85rem;margin-bottom:.8rem;color:var(--text-muted);" id="detectedInfo">正在检测...</div>
+                    <div class="btn-group">
+                        <button class="btn btn-green" onclick="confirmLocate()">确认定位</button>
+                        <button class="btn btn-blue" onclick="redoLocate()">重新检测</button>
+                    </div>
+                </div>
+                <div id="locateManual" style="display:none;">
+                    <div style="font-size:.85rem;margin-bottom:.8rem;color:var(--text-muted);" id="manualHint">请点击画面中的打分框位置</div>
+                    <div id="manualStatus" style="font-size:.82rem;font-family:var(--font-mono);margin-bottom:.6rem;"></div>
+                    <div class="btn-group">
+                        <button class="btn btn-green" id="confirmLocateBtn" onclick="confirmLocate()" style="display:none;">确认定位</button>
+                        <button class="btn btn-blue btn-sm" onclick="resetManualMark()">重新标记</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -210,9 +257,10 @@
     </div>
 
 <script>
-var pollTimer=null,imgPollTimer=null,logLines=[],curMaxScore=100;
+var pollTimer=null,imgPollTimer=null,logLines=[],curMaxScore=100,locateMode="auto",markPhase="",dragStartX=0,dragStartY=0,dragThreshold=8;
 
 function pickBrowser(el){document.querySelectorAll('.browser-opt').forEach(function(e){e.classList.remove('selected')});el.classList.add('selected');el.querySelector('input').checked=true}
+function pickLocate(el){var group=el.closest('.browser-select');group.querySelectorAll('.browser-opt').forEach(function(e){e.classList.remove('selected')});el.classList.add('selected');el.querySelector('input').checked=true;locateMode=el.querySelector('input').value}
 function toggleLog(){var b=document.getElementById('logBox');b.style.display=b.style.display==='none'?'block':'none'}
 
 function startGrading(){
@@ -236,24 +284,42 @@ function startGrading(){
     document.getElementById('browserSection').style.display='block';
     document.getElementById('logBox').style.display='block';
     document.getElementById('progressDetail').style.display='flex';
+    document.getElementById('refToggle').style.display='block';
+    document.getElementById('refEdit').value=ref;
     document.getElementById('pTotal').textContent=cnt;
     document.getElementById('pMax').textContent=ms;
     logLines=[];addLog('正在启动（满分'+ms+'分，共'+cnt+'份）...');
-    fetch('/api/auto/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reference:ref,count:cnt,browser:br,api_key:apiKey,api_base:apiBase,model:model,max_score:ms})}).then(function(r){return r.json()}).then(function(d){if(d.error){alert(d.error);resetBtn();return}pollTimer=setInterval(pollStatus,1500);imgPollTimer=setInterval(pollScreenshot,800)}).catch(function(e){alert('启动失败: '+e.message);resetBtn()});
+    fetch('/api/auto/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reference:ref,count:cnt,browser:br,api_key:apiKey,api_base:apiBase,model:model,max_score:ms,locate_mode:locateMode})}).then(function(r){return r.json()}).then(function(d){if(d.error){alert(d.error);resetBtn();return}pollTimer=setInterval(pollStatus,1500);imgPollTimer=setInterval(pollScreenshot,800)}).catch(function(e){alert('启动失败: '+e.message);resetBtn()});
 }
 function resetBtn(){document.getElementById('startBtn').disabled=false;document.getElementById('startBtn').innerHTML='开始自动阅卷';document.getElementById('stopBtn').style.display='none'}
 
-function pollStatus(){fetch('/api/auto/status').then(function(r){return r.json()}).then(function(s){updateUI(s);if(s.message)addLog(s.message);if(s.status==='finished'||s.status==='error'||s.status==='idle'||s.status==='stopped'){clearInterval(pollTimer);clearInterval(imgPollTimer);resetBtn();if(s.status==='finished'||(s.results&&s.results.length>0)){renderResults(s.results||[]);setStep(5)}}})}
+function pollStatus(){fetch('/api/auto/status').then(function(r){return r.json()}).then(function(s){updateUI(s);if(s.message)addLog(s.message);if(s.status==='finished'||s.status==='error'||s.status==='idle'||s.status==='stopped'){clearInterval(pollTimer);clearInterval(imgPollTimer);resetBtn();if(s.status==='finished'||(s.results&&s.results.length>0)){renderResults(s.results||[]);setStep(6)}}})}
 function pollScreenshot(){fetch('/api/auto/screenshot').then(function(r){return r.json()}).then(function(d){if(d.image){document.getElementById('livePlaceholder').style.display='none';var img=document.getElementById('liveImg');img.style.display='block';img.src=d.image}})}
 
 function updateUI(s){
     document.getElementById('statusBox').innerHTML='<span class="status-dot '+dotClass(s.status)+'"></span>'+(s.message||'...');
-    var idx={starting:1,login_waiting:2,auto_login_detected:2,login_confirmed:2,page_waiting:3,page_confirmed:3,detecting:4,running:4,finished:5,error:5,idle:0,stopped:5}[s.status]||0;
-    for(var i=1;i<=5;i++){var el=document.getElementById('st'+i);if(i<idx)el.className='step done';else if(i===idx)el.className='step active';else el.className='step'}
-    var lb=document.getElementById('loginBtn'),rb=document.getElementById('readyBtn');
-    lb.style.display='none';rb.style.display='none';
-    if(s.status==='login_waiting'||s.status==='auto_login_detected'){lb.style.display='inline-flex';lb.disabled=false;lb.innerHTML='已登录'}
+    var idx={starting:1,login_waiting:2,auto_login_detected:2,login_confirmed:2,page_waiting:3,page_confirmed:3,detecting:4,locating:4,locate_confirmed:4,running:5,finished:6,error:6,idle:0,stopped:6}[s.status]||0;
+    for(var i=1;i<=6;i++){var el=document.getElementById('st'+i);if(i<idx)el.className='step done';else if(i===idx)el.className='step active';else el.className='step'}
+    var lb=document.getElementById('loginBtn'),rb=document.getElementById('readyBtn'),lh=document.getElementById('loginHint');
+    lb.style.display='none';rb.style.display='none';lh.style.display='none';
+    if(s.status==='login_waiting'||s.status==='auto_login_detected'){lb.style.display='inline-flex';lb.disabled=false;lb.innerHTML='已登录';lh.style.display='block'}
     else if(s.status==='page_waiting'){rb.style.display='inline-flex';rb.disabled=false;rb.innerHTML='页面就绪'}
+    var ls=document.getElementById('locateSection');
+    if(s.status==='locating'){
+        ls.style.display='block';
+        if(s.locate_mode==='auto'){
+            document.getElementById('locateAuto').style.display='block';
+            document.getElementById('locateManual').style.display='none';
+            document.getElementById('locateLabel').textContent='自动定位确认';
+            if(s.detected_info)renderDetectedInfo(s.detected_info);
+        }else{
+            document.getElementById('locateAuto').style.display='none';
+            document.getElementById('locateManual').style.display='block';
+            document.getElementById('locateLabel').textContent='手动标记定位';
+            if(s.locate_phase==='manual_mark_score'){markPhase='score';document.getElementById('manualHint').textContent='请点击画面中的打分框位置'}
+            else if(s.locate_phase==='manual_mark_submit'){markPhase='submit';document.getElementById('manualHint').textContent='请点击提交按钮位置'}
+        }
+    }else{ls.style.display='none'}
     if(s.total>0){
         var pct=Math.round((s.progress/s.total)*100);
         document.getElementById('progressFill').style.width=pct+'%';
@@ -266,34 +332,108 @@ function updateUI(s){
 }
 
 function dotClass(st){if(st==='finished')return 'dot-green';if(st==='error'||st==='stopped')return 'dot-red';return 'dot-yellow'}
-function setStep(n){for(var i=1;i<=5;i++){var el=document.getElementById('st'+i);if(i<n)el.className='step done';else if(i===n)el.className='step active';else el.className='step'}}
+function setStep(n){for(var i=1;i<=6;i++){var el=document.getElementById('st'+i);if(i<n)el.className='step done';else if(i===n)el.className='step active';else el.className='step'}}
+function renderDetectedInfo(info){
+    var html='<div style="margin-bottom:.4rem"><b>检测模式:</b> ';
+    if(info.score_mode==='buttons'){html+='数字评分按钮';if(info.buttons)html+=' ('+info.buttons.join(', ')+')'}
+    else if(info.score_mode==='input'){html+='输入框'}
+    else{html+='未检测到'}
+    html+='</div>';
+    if(info.in_iframe)html+='<div style="margin-bottom:.4rem"><b>位置:</b> iframe #'+info.iframe_index+'</div>';
+    if(info.score_element){
+        var se=info.score_element;
+        html+='<div style="margin-bottom:.4rem"><b>打分元素:</b> '+(se.text||se.type||'')+' ('+se.x+','+se.y+')</div>';
+    }
+    if(info.submit_element){
+        var su=info.submit_element;
+        html+='<div style="margin-bottom:.4rem"><b>提交按钮:</b> '+su.text+' ('+su.x+','+su.y+')</div>';
+    }
+    document.getElementById('detectedInfo').innerHTML=html;
+}
 function addLog(msg){var t=new Date().toLocaleTimeString();logLines.push('['+t+'] '+msg);if(logLines.length>100)logLines=logLines.slice(-50);var box=document.getElementById('logBox');box.innerHTML=logLines.map(function(l){return '<div class="log-line">'+l+'</div>'}).join('');box.scrollTop=box.scrollHeight}
 
+function toggleRef(){var b=document.getElementById('refEditBox');b.style.display=b.style.display==='none'?'block':'none'}
+function saveReference(){
+    var ref=document.getElementById('refEdit').value.trim();
+    if(!ref){alert('批改标准不能为空');return}
+    fetch('/api/auto/update-reference',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reference:ref})})
+    .then(function(r){return r.json()}).then(function(d){
+        if(d.error){alert(d.error);return}
+        document.getElementById('refSaveStatus').textContent='已更新 '+new Date().toLocaleTimeString();
+        setTimeout(function(){document.getElementById('refSaveStatus').textContent=''},3000);
+        addLog('批改标准已更新');
+    });
+}
 function confirmLogin(){fetch('/api/auto/confirm-login',{method:'POST'});document.getElementById('loginBtn').disabled=true;document.getElementById('loginBtn').textContent='已确认';addLog('已确认登录')}
 function confirmReady(){fetch('/api/auto/confirm-ready',{method:'POST'});document.getElementById('readyBtn').disabled=true;document.getElementById('readyBtn').textContent='已确认';addLog('已确认页面就绪')}
+function confirmLocate(){fetch('/api/auto/confirm-locate',{method:'POST'});clearPersistentMarkers();addLog('已确认定位')}
+function redoLocate(){fetch('/api/auto/redo-locate',{method:'POST'});clearPersistentMarkers();addLog('重新检测中...')}
+function resetManualMark(){markPhase="score";clearPersistentMarkers();document.getElementById('manualStatus').innerHTML='';document.getElementById('confirmLocateBtn').style.display='none';document.getElementById('manualHint').textContent='请点击画面中的打分框位置';addLog('已重置手动标记')}
 function stopGrading(){fetch('/api/auto/stop',{method:'POST'}).then(function(){document.getElementById('stopBtn').style.display='none';addLog('已停止')})}
+function forceScreenshot(){fetch('/api/auto/force-screenshot',{method:'POST'});addLog('刷新画面')}
 
 function remotePost(url,data){return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})}
 
-function handleClick(e){
+function addPersistentMarker(viewport,left,top,label,id){
+    var old=document.getElementById(id);if(old)old.remove();
+    var m=document.createElement('div');m.className='persistent-marker';m.id=id;
+    m.style.left=left+'px';m.style.top=top+'px';
+    m.innerHTML='<div class="pm-ring"></div><div class="pm-cross"></div><div class="pm-label">'+label+'</div>';
+    viewport.appendChild(m);
+}
+function clearPersistentMarkers(){document.querySelectorAll('.persistent-marker').forEach(function(e){e.remove()})}
+
+function handleMouseDown(e){
+    e.preventDefault();
     var viewport=document.getElementById('viewport');
+    var rect=viewport.getBoundingClientRect();
+    dragStartX=e.clientX-rect.left;
+    dragStartY=e.clientY-rect.top;
+    viewport.style.cursor='grabbing';
+}
+function handleMouseUp(e){
+    var viewport=document.getElementById('viewport');
+    viewport.style.cursor='crosshair';
     var img=document.getElementById('liveImg');
     if(!img.src||img.style.display==='none')return;
     var rect=viewport.getBoundingClientRect();
-    var clickX=e.clientX-rect.left+viewport.scrollLeft;
-    var clickY=e.clientY-rect.top+viewport.scrollTop;
+    var endX=e.clientX-rect.left,endY=e.clientY-rect.top;
+    var dx=endX-dragStartX,dy=endY-dragStartY;
+    var dist=Math.sqrt(dx*dx+dy*dy);
     var imgRect=img.getBoundingClientRect();
-    var scaleX=img.naturalWidth/imgRect.width;
-    var scaleY=img.naturalHeight/imgRect.height;
-    var marker=document.createElement('div');
-    marker.className='click-marker';
-    marker.style.left=(e.clientX-rect.left)+'px';
-    marker.style.top=(e.clientY-rect.top)+'px';
-    viewport.appendChild(marker);
-    setTimeout(function(){marker.remove()},600);
-    var bx=Math.round(clickX*scaleX),by=Math.round(clickY*scaleY);
-    remotePost('/api/remote/click',{x:bx,y:by});
-    addLog('点击: ('+bx+','+by+')');
+    var scaleX=img.naturalWidth/imgRect.width,scaleY=img.naturalHeight/imgRect.height;
+    if(dist<dragThreshold){
+        var clickX=dragStartX+viewport.scrollLeft,clickY=dragStartY+viewport.scrollTop;
+        var bx=Math.round(clickX*scaleX),by=Math.round(clickY*scaleY);
+        var px=dragStartX,py=dragStartY;
+        if(markPhase==='score'){
+            addPersistentMarker(viewport,px,py,'打分框','pm-score');
+            remotePost('/api/auto/mark-score',{x:bx,y:by});
+            document.getElementById('manualStatus').innerHTML='<span style="color:var(--green)">✓ 打分框: ('+bx+', '+by+')</span>';
+            document.getElementById('manualHint').textContent='请点击提交按钮位置';
+            markPhase='submit';
+            addLog('标记打分框: ('+bx+','+by+')');
+        }else if(markPhase==='submit'){
+            addPersistentMarker(viewport,px,py,'提交按钮','pm-submit');
+            remotePost('/api/auto/mark-submit',{x:bx,y:by});
+            document.getElementById('manualStatus').innerHTML+='<br><span style="color:var(--green)">✓ 提交按钮: ('+bx+', '+by+')</span>';
+            document.getElementById('manualHint').textContent='请确认或调整标记位置';
+            document.getElementById('confirmLocateBtn').style.display='inline-flex';
+            markPhase='done';
+            addLog('标记提交按钮: ('+bx+','+by+')');
+        }else{
+            var marker=document.createElement('div');
+            marker.className='click-marker';marker.style.left=px+'px';marker.style.top=py+'px';
+            viewport.appendChild(marker);setTimeout(function(){marker.remove()},600);
+            remotePost('/api/remote/click',{x:bx,y:by});
+            addLog('点击: ('+bx+','+by+')');
+        }
+    }else{
+        var sx=Math.round(dragStartX*scaleX),sy=Math.round(dragStartY*scaleY);
+        var ex=Math.round(endX*scaleX),ey=Math.round(endY*scaleY);
+        remotePost('/api/remote/drag',{startX:sx,startY:sy,endX:ex,endY:ey});
+        addLog('拖拽: ('+sx+','+sy+') → ('+ex+','+ey+')');
+    }
 }
 function sendType(text){if(!text.trim())return;remotePost('/api/remote/type',{text:text});addLog('输入: '+text)}
 function sendKey(key){remotePost('/api/remote/key',{key:key});addLog('按键: '+key)}

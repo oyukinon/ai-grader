@@ -1,4 +1,4 @@
-﻿"""
+"""
 元素定位器 — iframe 上下文管理 + 去重检测 + 使用前重新定位
 """
 
@@ -12,6 +12,8 @@ class ElementFinder:
         self.score_mode = "none"
         self.in_iframe = False
         self.iframe_index = -1
+        self.manual_score_pos = None
+        self.manual_submit_pos = None
 
     def _switch_to_context(self):
         """切换到元素所在的 iframe 上下文"""
@@ -304,3 +306,99 @@ class ElementFinder:
     def re_detect(self):
         self.auto_detect_score_input()
         self.auto_detect_submit_button()
+
+    def get_detected_info(self):
+        info = {"score_mode": self.score_mode, "in_iframe": self.in_iframe, "iframe_index": self.iframe_index}
+        try:
+            if self.score_mode == "buttons":
+                self._switch_to_context()
+                btns = self._find_score_buttons_in_context(self.driver)
+                nums = [b.text.strip() for b in btns[:5]] if btns else []
+                info["buttons"] = nums
+                if btns:
+                    loc = btns[0].location
+                    sz = btns[0].size
+                    info["score_element"] = {"x": loc["x"], "y": loc["y"], "w": sz["width"], "h": sz["height"], "text": nums[0] if nums else ""}
+            elif self.score_mode == "input":
+                info["score_element"] = {"type": "input", "mode": "input"}
+        except Exception:
+            pass
+        try:
+            self.driver.switch_to.default_content()
+            if self.in_iframe and self.iframe_index >= 0:
+                self.driver.switch_to.frame(self.iframe_index)
+            keywords = ["确认作答", "提交分数", "确认评分", "确认", "下一题", "下一", "提交", "保存", "确定"]
+            for tag in ["button", "a", "div", "span"]:
+                elements = self.driver.find_elements(By.TAG_NAME, tag)
+                for el in elements:
+                    try:
+                        txt = el.text.strip()
+                        if txt and any(k in txt for k in keywords) and el.is_displayed():
+                            loc = el.location
+                            sz = el.size
+                            info["submit_element"] = {"x": loc["x"], "y": loc["y"], "w": sz["width"], "h": sz["height"], "text": txt}
+                            break
+                    except Exception:
+                        continue
+                if "submit_element" in info:
+                    break
+        except Exception:
+            pass
+        self.driver.switch_to.default_content()
+        return info
+
+    def set_manual_score(self, x, y):
+        self.manual_score_pos = {"x": int(x), "y": int(y)}
+        self.score_mode = "manual"
+        print("[定位] 手动打分框: (" + str(x) + ", " + str(y) + ")")
+
+    def set_manual_submit(self, x, y):
+        self.manual_submit_pos = {"x": int(x), "y": int(y)}
+        print("[定位] 手动提交按钮: (" + str(x) + ", " + str(y) + ")")
+
+    def _find_element_at_coord(self, driver, pos):
+        el = driver.execute_script(
+            "return document.elementFromPoint(arguments[0], arguments[1]);",
+            pos["x"], pos["y"]
+        )
+        if not el:
+            raise Exception("坐标 (" + str(pos["x"]) + ", " + str(pos["y"]) + ") 处无元素")
+        return el
+
+    def fill_score_manual(self, driver, score):
+        if not self.manual_score_pos:
+            raise Exception("未设置打分框位置")
+        score_str = str(int(float(score)))
+        self.driver.switch_to.default_content()
+        el = self._find_element_at_coord(driver, self.manual_score_pos)
+        tag = el.tag_name.lower()
+        if tag in ("input", "textarea"):
+            el.click()
+            time.sleep(0.2)
+            el.clear()
+            time.sleep(0.1)
+            driver.execute_script(
+                "arguments[0].value = arguments[1];"
+                "arguments[0].dispatchEvent(new Event('input',{bubbles:true}));"
+                "arguments[0].dispatchEvent(new Event('change',{bubbles:true}));"
+                "arguments[0].dispatchEvent(new Event('blur',{bubbles:true}));",
+                el, score_str,
+            )
+            print("[填分] 手动输入框填入: " + score_str)
+        else:
+            el.click()
+            print("[填分] 手动点击元素: " + tag + " (" + score_str + ")")
+        return True
+
+    def click_submit_manual(self, driver):
+        if not self.manual_submit_pos:
+            raise Exception("未设置提交按钮位置")
+        self.driver.switch_to.default_content()
+        el = self._find_element_at_coord(driver, self.manual_submit_pos)
+        try:
+            el.click()
+        except Exception:
+            driver.execute_script("arguments[0].click();", el)
+        txt = el.text.strip()
+        print("[提交] 手动点击: " + txt)
+        return True

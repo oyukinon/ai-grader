@@ -1,4 +1,4 @@
-﻿"""
+"""
 AI 改卷系统
 """
 
@@ -114,6 +114,7 @@ def auto_start():
     api_base = data.get("api_base", "").strip()
     model = data.get("model", "").strip()
     max_score = int(data.get("max_score", 100))
+    locate_mode = data.get("locate_mode", "auto")
     if not api_key:
         return jsonify({"error": "请填写 API Key"}), 400
     if not api_base:
@@ -124,10 +125,12 @@ def auto_start():
         return jsonify({"error": "请填写参考答案"}), 400
     if not count or count < 1:
         return jsonify({"error": "请输入有效的批改人数"}), 400
+    if count > 500:
+        return jsonify({"error": "单次批改人数不能超过500"}), 400
     state = auto_grader.get_state()
     if state["status"] not in ("idle", "finished", "error", "stopped"):
         return jsonify({"error": "已有任务在运行中"}), 400
-    auto_grader.start_grader(reference, count, browser, api_key, api_base, model, max_score)
+    auto_grader.start_grader(reference, count, browser, api_key, api_base, model, max_score, locate_mode)
     return jsonify({"ok": True})
 
 
@@ -169,6 +172,51 @@ def auto_confirm_ready():
     import auto_grader
     auto_grader.confirm_ready()
     return jsonify({"ok": True})
+
+
+@app.route("/api/auto/confirm-locate", methods=["POST"])
+def auto_confirm_locate():
+    import auto_grader
+    auto_grader.confirm_locate()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/auto/update-reference", methods=["POST"])
+def auto_update_reference():
+    import auto_grader
+    data = request.get_json()
+    ref = data.get("reference", "").strip()
+    if not ref:
+        return jsonify({"error": "批改标准不能为空"}), 400
+    auto_grader.update_reference(ref)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/auto/redo-locate", methods=["POST"])
+def auto_redo_locate():
+    import auto_grader
+    auto_grader.redo_locate()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/auto/mark-score", methods=["POST"])
+def auto_mark_score():
+    import auto_grader
+    data = request.get_json()
+    x = int(data.get("x", 0))
+    y = int(data.get("y", 0))
+    ok = auto_grader.mark_score_pos(x, y)
+    return jsonify({"ok": ok})
+
+
+@app.route("/api/auto/mark-submit", methods=["POST"])
+def auto_mark_submit():
+    import auto_grader
+    data = request.get_json()
+    x = int(data.get("x", 0))
+    y = int(data.get("y", 0))
+    ok = auto_grader.mark_submit_pos(x, y)
+    return jsonify({"ok": ok})
 
 
 @app.route("/api/auto/stop", methods=["POST"])
@@ -230,6 +278,25 @@ def remote_back():
     import auto_grader
     ok = auto_grader.go_back_browser()
     return jsonify({"ok": ok})
+
+
+@app.route("/api/remote/drag", methods=["POST"])
+def remote_drag():
+    import auto_grader
+    data = request.get_json()
+    sx = int(data.get("startX", 0))
+    sy = int(data.get("startY", 0))
+    ex = int(data.get("endX", 0))
+    ey = int(data.get("endY", 0))
+    ok = auto_grader.drag(sx, sy, ex, ey)
+    return jsonify({"ok": ok})
+
+
+@app.route("/api/auto/force-screenshot", methods=["POST"])
+def auto_force_screenshot():
+    import auto_grader
+    auto_grader.force_screenshot()
+    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":

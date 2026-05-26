@@ -1,4 +1,4 @@
-﻿"""
+"""
 浏览器管理 — 启动前自动关闭残留进程
 """
 
@@ -55,19 +55,21 @@ def _kill_previous_sessions(browser_type):
 
     try:
         result = subprocess.run(
-            ["wmic", "process", "where", "name='" + process_name + "'", "get", "ProcessId,CommandLine"],
+            ["tasklist", "/V", "/FO", "CSV", "/NH"],
             capture_output=True, text=True, timeout=5
         )
-        lines = result.stdout.strip().split("\n")
         killed = 0
-        for line in lines:
-            if profile_name in line:
-                parts = line.split()
-                if parts:
-                    pid = parts[-1]
-                    if pid.isdigit():
-                        subprocess.run(["taskkill", "/PID", pid, "/F"], capture_output=True, timeout=5)
-                        killed += 1
+        for line in result.stdout.strip().split("\n"):
+            if profile_name not in line:
+                continue
+            if process_name not in line:
+                continue
+            parts = line.split(",")
+            if len(parts) >= 2:
+                pid = parts[1].strip().strip('"')
+                if pid.isdigit():
+                    subprocess.run(["taskkill", "/PID", pid, "/F"], capture_output=True, timeout=5)
+                    killed += 1
         if killed > 0:
             print("[browser] 关闭了 " + str(killed) + " 个残留 " + process_name + " 进程")
             time.sleep(2)
