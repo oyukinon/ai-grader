@@ -32,6 +32,7 @@
 
 ```bash
 pip install flask openai selenium Pillow -i https://pypi.tuna.tsinghua.edu.cn/simple
+` ``` ` 
 
 **2. 输入指令如下（记得更换您的文件地址）**：
 cd C:\Users\Start\Desktop\ai-grader
