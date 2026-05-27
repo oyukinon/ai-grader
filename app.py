@@ -223,9 +223,16 @@ def auto_last_session():
 
 
 if __name__ == "__main__":
+    import webbrowser
+    import threading
+
+    def open_browser():
+        webbrowser.open("http://127.0.0.1:5000/auto")
+
     print("=" * 50)
-    print("  AI 改卷系统 o_o")
+    print("  AI 改卷系统")
     print("  手动改卷: http://127.0.0.1:5000")
     print("  自动阅卷: http://127.0.0.1:5000/auto")
     print("=" * 50)
+    threading.Timer(1.5, open_browser).start()
     app.run(debug=True, port=5000)

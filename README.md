@@ -39,20 +39,21 @@
 
 ### 安装启动
 
-**1. 安装依赖**（Win+R 输入 `cmd` 回车，执行以下命令）
+双击项目根目录的 `start.bat` 即可一键完成：
+
+1. 检查 Python 环境
+2. 首次运行自动安装依赖（flask、openai、selenium、Pillow）
+3. 启动服务并自动打开浏览器
+
+如需手动启动：
 
 ```text
 pip install flask openai selenium Pillow -i https://pypi.tuna.tsinghua.edu.cn/simple
-```
-
-**2. 启动服务**（修改为你的实际路径）
-
-```text
 cd C:\Users\你的用户名\Desktop\ai-grader
 python app.py
 ```
 
-**3. 打开浏览器访问**
+浏览器访问：
 
 - http://127.0.0.1:5000 — 手动改卷
 - http://127.0.0.1:5000/auto — 自动阅卷（智学网）
