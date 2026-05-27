@@ -159,7 +159,7 @@ def mark_submit_pos(x, y):
     status = _get("status")
     if status == "locating":
         _set("submit_pos", {"x": int(x), "y": int(y)})
-        _set("message", "提交按钮已标记，请在浏览器中点击「完成标记」")
+        _set("message", "两处已标记，请在页面中确认定位")
         return True
     return False
 
@@ -215,53 +215,37 @@ var overlay = document.createElement('div');
 overlay.id = '__aiGraderOverlay';
 overlay.innerHTML = `
 <style>
-#__aiGraderOverlay{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2147483646;display:flex;flex-direction:column;font-family:system-ui,sans-serif}
-.__ago-bg{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(45,107,180,.08);pointer-events:none}
-.__ago-hdr{position:relative;background:rgba(0,0,0,.85);color:#fff;padding:10px 16px;text-align:center;font-size:14px;z-index:1}
-.__ago-hdr small{display:block;color:#aaa;font-size:11px;margin-top:3px}
+#__aiGraderOverlay{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2147483646;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Helvetica Neue',sans-serif}
+.__ago-bg{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,113,227,.06);pointer-events:none}
+.__ago-hdr{position:relative;background:rgba(0,0,0,.82);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:#fff;padding:14px 20px;text-align:center;font-size:15px;font-weight:500;z-index:1;letter-spacing:-.01em}
+.__ago-hdr small{display:block;color:rgba(255,255,255,.55);font-size:12px;margin-top:4px;font-weight:400}
 .__ago-mid{flex:1;position:relative;cursor:crosshair}
-.__ago-bar{position:relative;background:rgba(0,0,0,.85);padding:8px 12px;display:flex;gap:6px;align-items:center;z-index:1}
-.__ago-bar button{padding:6px 12px;border:1px solid #555;border-radius:4px;background:#333;color:#ccc;font-size:12px;cursor:pointer}
-.__ago-bar button:hover{background:var(--accent,#2d6bb4);color:#fff;border-color:var(--accent,#2d6bb4)}
-.__ago-bar .__ago-ok{background:#3a7d44;border-color:#3a7d44;color:#fff}
-.__ago-bar .__ago-ok:hover{background:#2d8a36}
-.__ago-bar .__ago-ok:disabled{opacity:.4;cursor:not-allowed}
-.__ago-bar .__ago-status{flex:1;text-align:right;color:#aaa;font-size:11px}
 .__ago-marker{position:absolute;width:24px;height:24px;pointer-events:none;transform:translate(-50%,-50%)}
-.__ago-marker::before,.__ago-marker::after{content:'';position:absolute;background:#b44a2d}
+.__ago-marker::before,.__ago-marker::after{content:'';position:absolute;background:#0071e3}
 .__ago-marker::before{width:2px;height:24px;left:11px;top:0}
 .__ago-marker::after{width:24px;height:2px;top:11px;left:0}
-.__ago-marker .__ago-ring{position:absolute;width:28px;height:28px;border:2px solid #b44a2d;border-radius:50%;transform:translate(-50%,-50%);animation:__agoPulse 1.5s ease-in-out infinite}
-.__ago-marker .__ago-lbl{position:absolute;top:-20px;left:50%;transform:translateX(-50%);background:#b44a2d;color:#fff;font-size:10px;padding:1px 6px;border-radius:3px;white-space:nowrap}
-@keyframes __agoPulse{0%,100%{opacity:1;transform:translate(-50%,-50%) scale(1)}50%{opacity:.5;transform:translate(-50%,-50%) scale(1.2)}}
+.__ago-marker .__ago-ring{position:absolute;width:32px;height:32px;border:2.5px solid #0071e3;border-radius:50%;transform:translate(-50%,-50%);animation:__agoPulse 2s ease-in-out infinite}
+.__ago-marker .__ago-lbl{position:absolute;top:-24px;left:50%;transform:translateX(-50%);background:#0071e3;color:#fff;font-size:11px;font-weight:500;padding:2px 8px;border-radius:6px;white-space:nowrap;letter-spacing:.02em}
+@keyframes __agoPulse{0%,100%{opacity:1;transform:translate(-50%,-50%) scale(1)}50%{opacity:.4;transform:translate(-50%,-50%) scale(1.15)}}
 </style>
 <div class="__ago-bg"></div>
-<div class="__ago-hdr">请点击打分框位置<small>标记后请点击底部「完成标记」</small></div>
-<div class="__ago-mid" id="__agoMid"></div>
-<div class="__ago-bar">
-<button onclick="__agoScroll(-300)">↑ 上滚</button>
-<button onclick="__agoScroll(300)">↓ 下滚</button>
-<button onclick="__agoReset()">重置标记</button>
-<button class="__ago-ok" id="__agoDone" onclick="__agoFinish()" disabled>完成标记</button>
-<span class="__ago-status" id="__agoSt"></span>
-</div>`;
+<div class="__ago-hdr" id="__agoHdr">请点击打分框位置<small>在页面 app 中完成标记操作</small></div>
+<div class="__ago-mid" id="__agoMid"></div>`;
 document.body.appendChild(overlay);
 
 function __agoUpdate(){
 var s=window.__aiGraderClicks.score,p=window.__aiGraderClicks.submit;
-var h=document.getElementById('__agoSt');
-var done=document.getElementById('__agoDone');
-var hdr=overlay.querySelector('.__ago-hdr');
-if(s&&p){h.textContent='已标记两处';done.disabled=false;hdr.innerHTML='两处已标记，点击「完成标记」<small>或继续点击修改位置</small>'}
-else if(s){h.textContent='已标记打分框';done.disabled=true;hdr.innerHTML='请点击提交按钮位置<small>在页面中点击提交按钮</small>'}
-else{h.textContent='';done.disabled=true;hdr.innerHTML='请点击打分框位置<small>在页面中点击打分框</small>'}
+var hdr=document.getElementById('__agoHdr');
+if(s&&p){hdr.innerHTML='两处已标记<small>可在页面 app 中确认，或继续点击修改位置</small>'}
+else if(s){hdr.innerHTML='请点击<b>提交按钮</b>位置<small>在页面中点击提交按钮</small>'}
+else{hdr.innerHTML='请点击<b>打分框</b>位置<small>在页面中点击打分框</small>'}
 }
 
 overlay.querySelector('#__agoMid').addEventListener('click',function(e){
-var rect=overlay.getBoundingClientRect();
+var mid=overlay.querySelector('#__agoMid');
+var rect=mid.getBoundingClientRect();
 var x=Math.round(e.clientX-rect.left),y=Math.round(e.clientY-rect.top);
 var clicks=window.__aiGraderClicks;
-var mid=overlay.querySelector('#__agoMid');
 if(!clicks.score){
 clicks.score={x:x,y:y};
 var m=document.createElement('div');m.className='__ago-marker';m.id='__agoMS';
@@ -291,18 +275,14 @@ fetch('/api/auto/mark-score',{method:'POST',headers:{'Content-Type':'application
 __agoUpdate();
 });
 
-window.__agoScroll=function(d){window.scrollBy(0,d)};
 window.__agoReset=function(){
 window.__aiGraderClicks={score:null,submit:null};
 var mid=overlay.querySelector('#__agoMid');mid.innerHTML='';
 __agoUpdate();
 };
-window.__agoFinish=function(){
+window.__agoGetState=function(){
 var c=window.__aiGraderClicks;
-if(!c.score||!c.submit)return;
-fetch('/api/auto/overlay-done',{method:'POST',headers:{'Content-Type':'application/json'}}).catch(function(){});
-var el=document.getElementById('__aiGraderOverlay');if(el)el.remove();
-window.__aiGraderOverlay=false;
+return {score:c.score,submit:c.submit};
 };
 })();
 """
@@ -528,10 +508,10 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score):
 
         if _is_logged_in(driver):
             _set("status", "auto_login_detected")
-            _set("message", "检测到已登录！请点击「已登录」")
+            _set("message", "检测到已登录，正在自动确认...")
         else:
             _set("status", "login_waiting")
-            _set("message", "请在浏览器窗口中登录智学网，登录后在网页中点击「已登录」")
+            _set("message", "请在浏览器窗口中登录智学网")
 
         def watch_login():
             while _get("status") in ("login_waiting", "auto_login_detected"):
@@ -540,7 +520,7 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score):
                 try:
                     if _is_logged_in(driver):
                         _set("status", "auto_login_detected")
-                        _set("message", "检测到已登录！请点击「已登录」")
+                        _set("message", "检测到已登录，正在自动确认...")
                         break
                 except Exception:
                     pass
@@ -608,26 +588,23 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score):
 
             while _get("status") == "locating" and not _get("stop_requested"):
                 phase = _get("locate_phase")
-                if phase == "manual_done":
+                if phase == "confirmed":
                     break
-                elif phase == "confirmed":
-                    break
+                elif phase == "manual_done":
+                    sp = _get("score_pos")
+                    bp = _get("submit_pos")
+                    if sp and bp:
+                        finder.set_manual_score(sp["x"], sp["y"])
+                        finder.set_manual_submit(bp["x"], bp["y"])
+                    _set("locate_phase", "awaiting_confirm")
+                    _set("message", "标记完成，请在网页中确认定位")
+                elif phase == "re_detecting":
+                    _set("score_pos", None)
+                    _set("submit_pos", None)
+                    inject_click_overlay()
+                    _set("locate_phase", "manual_mark_score")
+                    _set("message", "已重新注入标记工具，请在浏览器页面中点击打分框位置")
                 time.sleep(0.5)
-
-            if _get("locate_phase") == "manual_done":
-                sp = _get("score_pos")
-                bp = _get("submit_pos")
-                if sp and bp:
-                    finder.set_manual_score(sp["x"], sp["y"])
-                    finder.set_manual_submit(bp["x"], bp["y"])
-                _set("locate_phase", "awaiting_confirm")
-                _set("message", "标记完成，请在网页中确认定位")
-
-                while _get("status") == "locating" and not _get("stop_requested"):
-                    phase = _get("locate_phase")
-                    if phase == "confirmed":
-                        break
-                    time.sleep(0.5)
 
         if _get("stop_requested"):
             return
