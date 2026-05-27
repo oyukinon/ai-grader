@@ -1,5 +1,5 @@
 """
-智学网自动阅卷 — 图片识别 + 远程控制 + 快速实时画面
+智学网自动阅卷 — 图片识别 + 覆盖层定位
 """
 
 import os
@@ -9,7 +9,6 @@ import time
 import base64
 import threading
 from datetime import datetime
-from PIL import Image
 from openai import OpenAI
 from browser_manager import create_driver
 from element_finder import ElementFinder
@@ -17,6 +16,7 @@ from element_finder import ElementFinder
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SCREENSHOT_DIR = os.path.join(BASE_DIR, "screenshots")
 os.makedirs(SCREENSHOT_DIR, exist_ok=True)
+RESULTS_FILE = os.path.join(SCREENSHOT_DIR, "last_session.json")
 
 _state = {
     "status": "idle",
@@ -26,7 +26,6 @@ _state = {
     "max_score": 100,
     "results": [],
     "latest_screenshot": "",
-    "fast_screenshot": "",
     "stop_requested": False,
     "driver": None,
     "login_confirmed": False,
@@ -39,9 +38,6 @@ _state = {
     "reference": "",
 }
 _state_lock = threading.Lock()
-
-_fast_screenshot_thread = None
-_fast_screenshot_running = False
 
 
 def _get(key):
@@ -63,8 +59,18 @@ def get_state():
                 out[k] = v[-50:]
             else:
                 out[k] = v
-        out.pop("fast_screenshot", None)
         return out
+
+
+def load_last_session():
+    """读取上次批改结果摘要"""
+    try:
+        if os.path.exists(RESULTS_FILE):
+            with open(RESULTS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return None
 
 
 def start_grader(reference, count, browser_type, api_key, api_base, model, max_score=100, locate_mode="auto"):
@@ -77,10 +83,6 @@ def start_grader(reference, count, browser_type, api_key, api_base, model, max_s
         _set("driver", None)
         time.sleep(1)
 
-    global _fast_screenshot_running
-    _fast_screenshot_running = False
-    time.sleep(0.5)
-
     _set("stop_requested", False)
     _set("status", "starting")
     _set("message", "正在启动浏览器...")
@@ -90,7 +92,6 @@ def start_grader(reference, count, browser_type, api_key, api_base, model, max_s
     _set("max_score", int(max_score))
     _set("results", [])
     _set("latest_screenshot", "")
-    _set("fast_screenshot", "")
     _set("login_confirmed", False)
     _set("page_confirmed", False)
     _set("locate_mode", locate_mode)
@@ -118,13 +119,11 @@ def confirm_ready():
         _set("message", "页面已确认，正在分析...")
 
 
-def set_locate_mode(mode):
-    _set("locate_mode", mode)
-
-
 def confirm_locate():
     status = _get("status")
     if status == "locating":
+        remove_overlay(_get("driver"))
+        clear_highlights(_get("driver"))
         _set("locate_phase", "confirmed")
         _set("status", "locate_confirmed")
         _set("message", "定位已确认，开始批改...")
@@ -133,6 +132,8 @@ def confirm_locate():
 def redo_locate():
     status = _get("status")
     if status == "locating":
+        remove_overlay(_get("driver"))
+        clear_highlights(_get("driver"))
         _set("locate_phase", "re_detecting")
         _set("message", "正在重新检测...")
 
@@ -149,7 +150,7 @@ def mark_score_pos(x, y):
         phase = _get("locate_phase")
         if phase == "manual_mark_score":
             _set("locate_phase", "manual_mark_submit")
-            _set("message", "打分框已标记，请点击提交按钮位置")
+            _set("message", "打分框已标记，请在浏览器中点击提交按钮位置")
         return True
     return False
 
@@ -158,14 +159,22 @@ def mark_submit_pos(x, y):
     status = _get("status")
     if status == "locating":
         _set("submit_pos", {"x": int(x), "y": int(y)})
-        _set("message", "提交按钮已标记，请确认或调整")
+        _set("message", "提交按钮已标记，请在浏览器中点击「完成标记」")
+        return True
+    return False
+
+
+def overlay_done():
+    """覆盖层「完成标记」被点击，读取坐标"""
+    status = _get("status")
+    if status == "locating":
+        _set("locate_phase", "manual_done")
+        _set("message", "标记完成，请在网页中确认定位")
         return True
     return False
 
 
 def stop_grader():
-    global _fast_screenshot_running
-    _fast_screenshot_running = False
     _set("stop_requested", True)
     _set("message", "正在停止...")
 
@@ -193,74 +202,226 @@ def _is_logged_in(driver):
         return False
 
 
-# ============ 快速截图 ============
+# ============ 覆盖层注入 ============
 
 
-_screenshot_mode = "normal"  # "login" | "normal"
+OVERLAY_SCRIPT = """
+(function(){
+if(window.__aiGraderOverlay) return;
+window.__aiGraderOverlay = true;
+window.__aiGraderClicks = {score:null, submit:null};
+
+var overlay = document.createElement('div');
+overlay.id = '__aiGraderOverlay';
+overlay.innerHTML = `
+<style>
+#__aiGraderOverlay{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2147483646;display:flex;flex-direction:column;font-family:system-ui,sans-serif}
+.__ago-bg{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(45,107,180,.08);pointer-events:none}
+.__ago-hdr{position:relative;background:rgba(0,0,0,.85);color:#fff;padding:10px 16px;text-align:center;font-size:14px;z-index:1}
+.__ago-hdr small{display:block;color:#aaa;font-size:11px;margin-top:3px}
+.__ago-mid{flex:1;position:relative;cursor:crosshair}
+.__ago-bar{position:relative;background:rgba(0,0,0,.85);padding:8px 12px;display:flex;gap:6px;align-items:center;z-index:1}
+.__ago-bar button{padding:6px 12px;border:1px solid #555;border-radius:4px;background:#333;color:#ccc;font-size:12px;cursor:pointer}
+.__ago-bar button:hover{background:var(--accent,#2d6bb4);color:#fff;border-color:var(--accent,#2d6bb4)}
+.__ago-bar .__ago-ok{background:#3a7d44;border-color:#3a7d44;color:#fff}
+.__ago-bar .__ago-ok:hover{background:#2d8a36}
+.__ago-bar .__ago-ok:disabled{opacity:.4;cursor:not-allowed}
+.__ago-bar .__ago-status{flex:1;text-align:right;color:#aaa;font-size:11px}
+.__ago-marker{position:absolute;width:24px;height:24px;pointer-events:none;transform:translate(-50%,-50%)}
+.__ago-marker::before,.__ago-marker::after{content:'';position:absolute;background:#b44a2d}
+.__ago-marker::before{width:2px;height:24px;left:11px;top:0}
+.__ago-marker::after{width:24px;height:2px;top:11px;left:0}
+.__ago-marker .__ago-ring{position:absolute;width:28px;height:28px;border:2px solid #b44a2d;border-radius:50%;transform:translate(-50%,-50%);animation:__agoPulse 1.5s ease-in-out infinite}
+.__ago-marker .__ago-lbl{position:absolute;top:-20px;left:50%;transform:translateX(-50%);background:#b44a2d;color:#fff;font-size:10px;padding:1px 6px;border-radius:3px;white-space:nowrap}
+@keyframes __agoPulse{0%,100%{opacity:1;transform:translate(-50%,-50%) scale(1)}50%{opacity:.5;transform:translate(-50%,-50%) scale(1.2)}}
+</style>
+<div class="__ago-bg"></div>
+<div class="__ago-hdr">请点击打分框位置<small>标记后请点击底部「完成标记」</small></div>
+<div class="__ago-mid" id="__agoMid"></div>
+<div class="__ago-bar">
+<button onclick="__agoScroll(-300)">↑ 上滚</button>
+<button onclick="__agoScroll(300)">↓ 下滚</button>
+<button onclick="__agoReset()">重置标记</button>
+<button class="__ago-ok" id="__agoDone" onclick="__agoFinish()" disabled>完成标记</button>
+<span class="__ago-status" id="__agoSt"></span>
+</div>`;
+document.body.appendChild(overlay);
+
+function __agoUpdate(){
+var s=window.__aiGraderClicks.score,p=window.__aiGraderClicks.submit;
+var h=document.getElementById('__agoSt');
+var done=document.getElementById('__agoDone');
+var hdr=overlay.querySelector('.__ago-hdr');
+if(s&&p){h.textContent='已标记两处';done.disabled=false;hdr.innerHTML='两处已标记，点击「完成标记」<small>或继续点击修改位置</small>'}
+else if(s){h.textContent='已标记打分框';done.disabled=true;hdr.innerHTML='请点击提交按钮位置<small>在页面中点击提交按钮</small>'}
+else{h.textContent='';done.disabled=true;hdr.innerHTML='请点击打分框位置<small>在页面中点击打分框</small>'}
+}
+
+overlay.querySelector('#__agoMid').addEventListener('click',function(e){
+var rect=overlay.getBoundingClientRect();
+var x=Math.round(e.clientX-rect.left),y=Math.round(e.clientY-rect.top);
+var clicks=window.__aiGraderClicks;
+var mid=overlay.querySelector('#__agoMid');
+if(!clicks.score){
+clicks.score={x:x,y:y};
+var m=document.createElement('div');m.className='__ago-marker';m.id='__agoMS';
+m.style.left=x+'px';m.style.top=y+'px';
+m.innerHTML='<div class="__ago-ring"></div><div class="__ago-lbl">打分框</div>';
+mid.appendChild(m);
+fetch('/api/auto/mark-score',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({x:x,y:y})}).catch(function(){});
+}else if(!clicks.submit){
+clicks.submit={x:x,y:y};
+var old=document.getElementById('__agoMP');if(old)old.remove();
+var m2=document.createElement('div');m2.className='__ago-marker';m2.id='__agoMP';
+m2.style.left=x+'px';m2.style.top=y+'px';
+m2.innerHTML='<div class="__ago-ring"></div><div class="__ago-lbl">提交按钮</div>';
+mid.appendChild(m2);
+fetch('/api/auto/mark-submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({x:x,y:y})}).catch(function(){});
+}else{
+clicks.score={x:x,y:y};
+clicks.submit=null;
+var oldM=document.getElementById('__agoMS');if(oldM)oldM.remove();
+var oldP=document.getElementById('__agoMP');if(oldP)oldP.remove();
+var m3=document.createElement('div');m3.className='__ago-marker';m3.id='__agoMS';
+m3.style.left=x+'px';m3.style.top=y+'px';
+m3.innerHTML='<div class="__ago-ring"></div><div class="__ago-lbl">打分框</div>';
+mid.appendChild(m3);
+fetch('/api/auto/mark-score',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({x:x,y:y})}).catch(function(){});
+}
+__agoUpdate();
+});
+
+window.__agoScroll=function(d){window.scrollBy(0,d)};
+window.__agoReset=function(){
+window.__aiGraderClicks={score:null,submit:null};
+var mid=overlay.querySelector('#__agoMid');mid.innerHTML='';
+__agoUpdate();
+};
+window.__agoFinish=function(){
+var c=window.__aiGraderClicks;
+if(!c.score||!c.submit)return;
+fetch('/api/auto/overlay-done',{method:'POST',headers:{'Content-Type':'application/json'}}).catch(function(){});
+var el=document.getElementById('__aiGraderOverlay');if(el)el.remove();
+window.__aiGraderOverlay=false;
+};
+})();
+"""
 
 
-def set_screenshot_mode(mode):
-    global _screenshot_mode
-    _screenshot_mode = mode
-
-
-def _capture_once(driver):
-    """截取一次视口画面，返回 base64 data URL"""
-    driver.switch_to.default_content()
-    png = driver.get_screenshot_as_png()
-    img = Image.open(io.BytesIO(png))
-    try:
-        vw = driver.execute_script("return window.innerWidth")
-        vh = driver.execute_script("return window.innerHeight")
-        scale = min(960.0 / vw, 1.0)
-        new_w = int(vw * scale)
-        new_h = int(vh * scale)
-        img = img.crop((0, 0, min(vw, img.width), min(vh, img.height)))
-        img = img.resize((new_w, new_h), Image.LANCZOS)
-    except Exception:
-        img = img.resize((960, 540), Image.LANCZOS)
-    quality = 90 if _screenshot_mode == "login" else 75
-    buf = io.BytesIO()
-    img.save(buf, format="JPEG", quality=quality, optimize=True)
-    b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
-    return "data:image/jpeg;base64," + b64
-
-
-def force_screenshot():
-    """强制立即截取一次画面"""
+def inject_click_overlay():
+    """注入覆盖层到主页面和 iframe"""
     driver = _get("driver")
     if not driver:
         return
     try:
-        data = _capture_once(driver)
-        _set("fast_screenshot", data)
+        driver.switch_to.default_content()
+        driver.execute_script(OVERLAY_SCRIPT)
+        iframes = driver.find_elements("tag name", "iframe")
+        for i in range(len(iframes)):
+            try:
+                driver.switch_to.default_content()
+                driver.switch_to.frame(i)
+                driver.execute_script(OVERLAY_SCRIPT)
+            except Exception:
+                pass
+        driver.switch_to.default_content()
+        print("[overlay] 覆盖层已注入")
+    except Exception as e:
+        print("[overlay] 注入失败: " + str(e))
+
+
+def remove_overlay(driver):
+    """移除覆盖层"""
+    if not driver:
+        return
+    try:
+        driver.switch_to.default_content()
+        driver.execute_script("""
+            var el = document.getElementById('__aiGraderOverlay');
+            if(el) el.remove();
+            window.__aiGraderOverlay = false;
+        """)
+        iframes = driver.find_elements("tag name", "iframe")
+        for i in range(len(iframes)):
+            try:
+                driver.switch_to.default_content()
+                driver.switch_to.frame(i)
+                driver.execute_script("""
+                    var el = document.getElementById('__aiGraderOverlay');
+                    if(el) el.remove();
+                    window.__aiGraderOverlay = false;
+                """)
+            except Exception:
+                pass
+        driver.switch_to.default_content()
     except Exception:
         pass
 
 
-def _start_fast_screenshot(driver):
-    """启动后台快速截图线程，登录阶段 0.3s/高质量，正常 0.8s/标准质量"""
-    global _fast_screenshot_running, _fast_screenshot_thread
-    _fast_screenshot_running = True
+def highlight_detected_elements(driver, info):
+    """自动模式：高亮检测到的元素"""
+    if not driver or not info:
+        return
+    try:
+        driver.switch_to.default_content()
+        if info.get("in_iframe") and info.get("iframe_index", -1) >= 0:
+            driver.switch_to.frame(info["iframe_index"])
+        driver.execute_script("""
+            if(!document.getElementById('__aiGraderHL')){
+                var s=document.createElement('style');
+                s.id='__aiGraderHL';
+                s.textContent='.__ai-hl{outline:3px solid #3a7d44!important;background:rgba(58,125,68,.1)!important;transition:outline .2s}';
+                document.head.appendChild(s);
+            }
+        """)
+        if info.get("score_element"):
+            se = info["score_element"]
+            if se.get("x") is not None:
+                el = driver.execute_script(
+                    "return document.elementFromPoint(arguments[0],arguments[1]);",
+                    se["x"] + se.get("w", 0) // 2, se["y"] + se.get("h", 0) // 2
+                )
+                if el:
+                    driver.execute_script("arguments[0].classList.add('__ai-hl')", el)
+        if info.get("submit_element"):
+            su = info["submit_element"]
+            if su.get("x") is not None:
+                el = driver.execute_script(
+                    "return document.elementFromPoint(arguments[0],arguments[1]);",
+                    su["x"] + su.get("w", 0) // 2, su["y"] + su.get("h", 0) // 2
+                )
+                if el:
+                    driver.execute_script("arguments[0].classList.add('__ai-hl')", el)
+        driver.switch_to.default_content()
+        print("[highlight] 元素已高亮")
+    except Exception as e:
+        print("[highlight] 高亮失败: " + str(e))
 
-    def loop():
-        while _fast_screenshot_running:
+
+def clear_highlights(driver):
+    """清除高亮"""
+    if not driver:
+        return
+    try:
+        driver.switch_to.default_content()
+        driver.execute_script("""
+            var s=document.getElementById('__aiGraderHL');if(s)s.remove();
+            document.querySelectorAll('.__ai-hl').forEach(function(e){e.classList.remove('__ai-hl')});
+        """)
+        iframes = driver.find_elements("tag name", "iframe")
+        for i in range(len(iframes)):
             try:
-                data = _capture_once(driver)
-                _set("fast_screenshot", data)
+                driver.switch_to.default_content()
+                driver.switch_to.frame(i)
+                driver.execute_script("""
+                    var s=document.getElementById('__aiGraderHL');if(s)s.remove();
+                    document.querySelectorAll('.__ai-hl').forEach(function(e){e.classList.remove('__ai-hl')});
+                """)
             except Exception:
                 pass
-            interval = 0.3 if _screenshot_mode == "login" else 0.8
-            time.sleep(interval)
-
-    _fast_screenshot_thread = threading.Thread(target=loop, daemon=True)
-    _fast_screenshot_thread.start()
-    print("[fast] 快速截图线程已启动")
-
-
-def _stop_fast_screenshot():
-    global _fast_screenshot_running
-    _fast_screenshot_running = False
+        driver.switch_to.default_content()
+    except Exception:
+        pass
 
 
 # ============ 评分截图（保存到文件） ============
@@ -280,7 +441,7 @@ def encode_local_image(filepath):
     return "data:image/png;base64," + base64.b64encode(data).decode("utf-8")
 
 
-# ============ AI 评分（合并自 grader.py） ============
+# ============ AI 评分 ============
 
 
 def ai_grade(reference, max_score, api_key, api_base, model, student_answer=None, image_data=None, is_image=False):
@@ -346,124 +507,6 @@ def ai_grade(reference, max_score, api_key, api_base, model, student_answer=None
         return None
 
 
-# ============ 远程控制 ============
-
-
-def click_at(x, y):
-    driver = _get("driver")
-    if not driver:
-        return False
-    try:
-        from selenium.webdriver.common.action_chains import ActionChains
-        driver.switch_to.default_content()
-        ActionChains(driver).move_by_offset(int(x), int(y)).click().perform()
-        ActionChains(driver).move_by_offset(-int(x), -int(y)).perform()
-        return True
-    except Exception as e:
-        print("[remote] 点击失败: " + str(e))
-        return False
-
-
-def type_text(text):
-    driver = _get("driver")
-    if not driver:
-        return False
-    try:
-        from selenium.webdriver.common.action_chains import ActionChains
-        ActionChains(driver).send_keys(text).perform()
-        return True
-    except Exception:
-        pass
-    try:
-        driver.execute_script("""
-            var el = document.activeElement;
-            if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
-                el.value += arguments[0];
-                el.dispatchEvent(new Event('input', {bubbles: true}));
-                el.dispatchEvent(new Event('change', {bubbles: true}));
-            }
-        """, text)
-        return True
-    except Exception as e:
-        print("[remote] 输入失败: " + str(e))
-        return False
-
-
-def press_key(key):
-    driver = _get("driver")
-    if not driver:
-        return False
-    try:
-        from selenium.webdriver.common.keys import Keys
-        from selenium.webdriver.common.action_chains import ActionChains
-        key_map = {
-            "enter": Keys.ENTER, "tab": Keys.TAB, "backspace": Keys.BACKSPACE,
-            "escape": Keys.ESCAPE, "space": Keys.SPACE,
-            "up": Keys.ARROW_UP, "down": Keys.ARROW_DOWN,
-            "left": Keys.ARROW_LEFT, "right": Keys.ARROW_RIGHT,
-        }
-        key_val = key_map.get(key.lower(), key)
-        ActionChains(driver).send_keys(key_val).perform()
-        return True
-    except Exception as e:
-        print("[remote] 按键失败: " + str(e))
-        return False
-
-
-def scroll_browser(direction, amount=300):
-    driver = _get("driver")
-    if not driver:
-        return False
-    try:
-        d = amount if direction == "down" else -amount
-        driver.execute_script("window.scrollBy(0, " + str(d) + ")")
-        return True
-    except Exception:
-        return False
-
-
-def navigate_browser(url):
-    driver = _get("driver")
-    if not driver:
-        return False
-    try:
-        if not url.startswith("http"):
-            url = "https://" + url
-        driver.get(url)
-        return True
-    except Exception:
-        return False
-
-
-def go_back_browser():
-    driver = _get("driver")
-    if not driver:
-        return False
-    try:
-        driver.back()
-        return True
-    except Exception:
-        return False
-
-
-def drag(start_x, start_y, end_x, end_y):
-    driver = _get("driver")
-    if not driver:
-        return False
-    try:
-        from selenium.webdriver.common.action_chains import ActionChains
-        driver.switch_to.default_content()
-        # 用 JS 获取页面元素，再用 ActionChains 拖拽
-        body = driver.find_element("tag name", "body")
-        offset_x = int(end_x) - int(start_x)
-        offset_y = int(end_y) - int(start_y)
-        ActionChains(driver).move_to_element_with_offset(body, int(start_x), int(start_y)).click_and_hold().pause(0.1).move_by_offset(offset_x, offset_y).pause(0.1).release().perform()
-        return True
-    except Exception as e:
-        print("[remote] 拖拽失败: " + str(e))
-        return False
-
-
 # ============ 主运行 ============
 
 
@@ -483,21 +526,12 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score):
         driver.get("https://www.zhixue.com")
         time.sleep(3)
 
-        _start_fast_screenshot(driver)
-
-        try:
-            take_screenshot(driver, "login_page")
-        except Exception:
-            pass
-
         if _is_logged_in(driver):
             _set("status", "auto_login_detected")
-            _set("message", "检测到已登录！点击「已登录」")
+            _set("message", "检测到已登录！请点击「已登录」")
         else:
             _set("status", "login_waiting")
-            _set("message", "请在浏览器中登录智学网，登录后点击「已登录」")
-
-        set_screenshot_mode("login")
+            _set("message", "请在浏览器窗口中登录智学网，登录后在网页中点击「已登录」")
 
         def watch_login():
             while _get("status") in ("login_waiting", "auto_login_detected"):
@@ -506,7 +540,7 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score):
                 try:
                     if _is_logged_in(driver):
                         _set("status", "auto_login_detected")
-                        _set("message", "检测到已登录！点击「已登录」")
+                        _set("message", "检测到已登录！请点击「已登录」")
                         break
                 except Exception:
                     pass
@@ -525,9 +559,8 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score):
                 _set("message", "已取消")
                 return
 
-        set_screenshot_mode("normal")
         _set("status", "page_waiting")
-        _set("message", "请进入阅卷页面，完成后点击「页面就绪」")
+        _set("message", "请在浏览器中进入阅卷页面，完成后在网页中点击「页面就绪」")
 
         if not _wait_until("page_waiting", 1800):
             _set("status", "stopped")
@@ -536,10 +569,6 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score):
 
         _set("status", "detecting")
         _set("message", "正在分析页面...")
-        try:
-            take_screenshot(driver, "grading_page")
-        except Exception:
-            pass
 
         finder = ElementFinder(driver)
         locate_mode = _get("locate_mode")
@@ -549,17 +578,20 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score):
             finder.auto_detect_submit_button()
             info = finder.get_detected_info()
             _set("detected_info", info)
+            highlight_detected_elements(driver, info)
             _set("status", "locating")
             _set("locate_phase", "auto_confirm")
-            _set("message", "自动检测完成，请确认定位结果")
+            _set("message", "自动检测完成，浏览器页面已高亮标记，请确认")
 
             while _get("status") == "locating" and not _get("stop_requested"):
                 phase = _get("locate_phase")
                 if phase == "re_detecting":
+                    clear_highlights(driver)
                     finder.auto_detect_score_input()
                     finder.auto_detect_submit_button()
                     info = finder.get_detected_info()
                     _set("detected_info", info)
+                    highlight_detected_elements(driver, info)
                     _set("locate_phase", "auto_confirm")
                     _set("message", "重新检测完成，请确认")
                 elif phase == "confirmed":
@@ -568,23 +600,39 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score):
         else:
             _set("status", "locating")
             _set("locate_phase", "manual_mark_score")
-            _set("message", "请点击画面中的打分框位置")
+            _set("message", "正在注入标记工具...")
             _set("score_pos", None)
             _set("submit_pos", None)
+            inject_click_overlay()
+            _set("message", "请在浏览器页面中点击打分框位置")
 
             while _get("status") == "locating" and not _get("stop_requested"):
                 phase = _get("locate_phase")
-                if phase == "confirmed":
-                    sp = _get("score_pos")
-                    bp = _get("submit_pos")
-                    if sp and bp:
-                        finder.set_manual_score(sp["x"], sp["y"])
-                        finder.set_manual_submit(bp["x"], bp["y"])
+                if phase == "manual_done":
+                    break
+                elif phase == "confirmed":
                     break
                 time.sleep(0.5)
 
+            if _get("locate_phase") == "manual_done":
+                sp = _get("score_pos")
+                bp = _get("submit_pos")
+                if sp and bp:
+                    finder.set_manual_score(sp["x"], sp["y"])
+                    finder.set_manual_submit(bp["x"], bp["y"])
+                _set("locate_phase", "awaiting_confirm")
+                _set("message", "标记完成，请在网页中确认定位")
+
+                while _get("status") == "locating" and not _get("stop_requested"):
+                    phase = _get("locate_phase")
+                    if phase == "confirmed":
+                        break
+                    time.sleep(0.5)
+
         if _get("stop_requested"):
             return
+
+        clear_highlights(driver)
 
         _set("status", "running")
         _set("message", "开始批改（满分" + str(max_score) + "分）...")
@@ -671,13 +719,29 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score):
             _set("progress", i + 1)
             time.sleep(2)
 
-        _stop_fast_screenshot()
-
         ok = [r for r in results if r.get("success")]
         avg = sum(r["data"]["score"] for r in ok) / len(ok) if ok else 0
         result_file = os.path.join(SCREENSHOT_DIR, "results.json")
         with open(result_file, "w", encoding="utf-8") as f:
             json.dump(results, f, ensure_ascii=False, indent=2)
+
+        # 保存批改结果摘要到 last_session.json
+        scores = [r["data"]["score"] for r in ok]
+        session_data = {
+            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "total": count,
+            "success": len(ok),
+            "avg_score": round(avg, 1),
+            "max_score_val": max(scores) if scores else 0,
+            "min_score_val": min(scores) if scores else 0,
+            "max_score": max_score,
+            "recent_results": results[-20:],
+        }
+        try:
+            with open(RESULTS_FILE, "w", encoding="utf-8") as f:
+                json.dump(session_data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print("[auto] 保存历史记录失败: " + str(e))
 
         _set("status", "finished")
         _set("message", "全部完成！成功 " + str(len(ok)) + "/" + str(count) + "，平均分 " + str(round(avg, 1)) + "/" + str(max_score))

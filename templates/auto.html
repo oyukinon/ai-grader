@@ -54,33 +54,9 @@
         .step{flex:1;padding:.5rem .3rem;text-align:center;font-size:.72rem;font-family:var(--font-mono);border-bottom:3px solid var(--border);color:var(--text-muted);transition:all .3s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         .step.active{border-color:var(--accent);color:var(--accent);font-weight:600}
         .step.done{border-color:var(--green);color:var(--green)}
-        .browser-frame{position:relative;width:100%;background:#1a1a1a;border-radius:var(--radius);overflow:hidden;box-shadow:0 4px 30px rgba(0,0,0,.15)}
-        .browser-toolbar{display:flex;align-items:center;gap:.5rem;padding:.5rem .8rem;background:#2a2a2a;border-bottom:1px solid #333}
-        .browser-toolbar .dots{display:flex;gap:.3rem}
-        .browser-toolbar .dots span{width:10px;height:10px;border-radius:50%}
-        .browser-toolbar .dots span:nth-child(1){background:#ff5f57}
-        .browser-toolbar .dots span:nth-child(2){background:#febc2e}
-        .browser-toolbar .dots span:nth-child(3){background:#28c840}
-        .browser-toolbar input{flex:1;padding:.3rem .6rem;border:1px solid #444;border-radius:4px;background:#1a1a1a;color:#ccc;font-family:var(--font-mono);font-size:.75rem;outline:none}
-        .browser-viewport{position:relative;cursor:crosshair;overflow:hidden;background:#111;min-height:200px}
-        .browser-viewport img{width:100%;height:auto;display:block}
-        .browser-viewport .placeholder{padding:4rem;text-align:center;color:#666;font-size:.85rem}
-        .click-marker{position:absolute;width:20px;height:20px;border:2px solid var(--accent);border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;animation:clickPulse .5s ease-out forwards}
-        @keyframes clickPulse{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(2)}}
-        .persistent-marker{position:absolute;pointer-events:none;z-index:10}
-        .persistent-marker .pm-cross{position:absolute;width:24px;height:24px;transform:translate(-50%,-50%)}
-        .persistent-marker .pm-cross::before,.persistent-marker .pm-cross::after{content:'';position:absolute;background:var(--accent)}
-        .persistent-marker .pm-cross::before{width:2px;height:24px;left:11px;top:0}
-        .persistent-marker .pm-cross::after{width:24px;height:2px;top:11px;left:0}
-        .persistent-marker .pm-ring{position:absolute;width:28px;height:28px;border:2px solid var(--accent);border-radius:50%;transform:translate(-50%,-50%);animation:pmPulse 1.5s ease-in-out infinite}
-        @keyframes pmPulse{0%,100%{opacity:1;transform:translate(-50%,-50%) scale(1)}50%{opacity:.5;transform:translate(-50%,-50%) scale(1.2)}}
-        .persistent-marker .pm-label{position:absolute;top:-22px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;font-size:10px;font-family:var(--font-mono);padding:1px 6px;border-radius:3px;white-space:nowrap}
-        .browser-controls{display:flex;gap:.4rem;padding:.5rem .8rem;background:#2a2a2a;border-top:1px solid #333;flex-wrap:wrap;align-items:center}
-        .browser-controls .btn{padding:.35rem .7rem;font-size:.72rem;border-radius:4px}
-        .keyboard-bar{display:flex;gap:.3rem;padding:.5rem .8rem;background:#222;border-top:1px solid #333;flex-wrap:wrap;align-items:center}
-        .keyboard-bar .btn{padding:.3rem .6rem;font-size:.68rem;border-radius:3px;background:#333;color:#ccc;border:1px solid #444}
-        .keyboard-bar .btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
-        .keyboard-bar input{flex:1;min-width:120px;padding:.35rem .6rem;border:1px solid #444;border-radius:4px;background:#1a1a1a;color:#ccc;font-family:var(--font-mono);font-size:.72rem;outline:none}
+        .step-hint{background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius-sm);padding:.8rem 1rem;font-size:.85rem;line-height:1.7;margin-bottom:.8rem}
+        .step-hint strong{color:var(--accent)}
+        .step-hint .browser-tag{display:inline-block;background:var(--blue);color:#fff;font-size:.72rem;font-family:var(--font-mono);padding:1px 6px;border-radius:3px;margin-right:4px}
         .log-box{max-height:150px;overflow-y:auto;font-family:var(--font-mono);font-size:.75rem;color:var(--text-muted);background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius-sm);padding:.6rem;margin-top:.6rem}
         .log-line{padding:.15rem 0;border-bottom:1px solid rgba(0,0,0,.04)}
         .collapse-toggle{font-size:.78rem;color:var(--text-muted);cursor:pointer;margin-bottom:.3rem;font-family:var(--font-mono)}
@@ -98,7 +74,9 @@
         .result-header:hover{background:var(--surface-alt)}
         .badge{padding:.15rem .5rem;border-radius:20px;font-size:.72rem;font-family:var(--font-mono);font-weight:500}
         .badge-score{background:var(--accent-bg);color:var(--accent)}.badge-grade{background:var(--text);color:var(--bg)}.badge-error{background:var(--red-bg);color:var(--red)}
-        .result-body{padding:0 1rem 1rem;display:none;font-size:.85rem}.result-body.open{display:block}
+        .result-body{padding:0 1rem 1rem;font-size:.85rem;overflow:hidden;max-height:0;transition:max-height .3s ease}
+        .result-body.open{max-height:600px}
+        .locate-info{font-size:.82rem;font-family:var(--font-mono);color:var(--text-muted);padding:.4rem 0;line-height:1.6}
         @media(max-width:640px){.container{padding:1.5rem 1rem 3rem}header h1{font-size:1.5rem}.stats{grid-template-columns:1fr}.form-grid,.form-grid-3,.form-grid-4{grid-template-columns:1fr}}
     </style>
 </head>
@@ -106,7 +84,7 @@
     <div class="container">
         <header>
             <h1>AI改卷系统<span>o_o</span></h1>
-            <p>自助阅卷系统 - 直接在网页中控制浏览器</p>
+            <p>自助阅卷系统 - 直接在浏览器中操作智学网</p>
         </header>
         <div class="nav">
             <a href="/">手动改卷</a>
@@ -120,6 +98,9 @@
             <div class="step" id="st5">批改</div>
             <div class="step" id="st6">完成</div>
         </div>
+
+        <!-- 步骤提示 -->
+        <div class="step-hint" id="stepHint" style="display:none;"></div>
 
         <!-- API 配置 -->
         <div class="section">
@@ -165,44 +146,12 @@
             </div>
         </div>
 
-        <!-- 内嵌浏览器 -->
-        <div class="section" id="browserSection" style="display:none;">
-            <div class="section-label">浏览器控制台（点击画面操作智学网）</div>
-            <div class="browser-frame">
-                <div class="browser-toolbar">
-                    <div class="dots"><span></span><span></span><span></span></div>
-                    <input type="text" id="urlBar" placeholder="输入网址回车导航" onkeydown="if(event.key==='Enter')navTo(this.value)">
-                    <button class="btn btn-sm" style="background:#444;color:#ccc;" onclick="goBack()">← 后退</button>
-                </div>
-                <div class="browser-viewport" id="viewport" onmousedown="handleMouseDown(event)" onmouseup="handleMouseUp(event)" style="cursor:crosshair;">
-                    <div class="placeholder" id="livePlaceholder">浏览器启动后将在此显示</div>
-                    <img id="liveImg" style="display:none;" alt="实时画面">
-                </div>
-                <div id="loginHint" style="display:none;padding:.4rem .8rem;background:#2a2a2a;border-top:1px solid #333;font-size:.72rem;color:#d4a72d;text-align:center;">验证码请直接在浏览器窗口中操作（此画面有延迟）</div>
-                <div class="browser-controls">
-                    <button class="btn btn-green" id="loginBtn" onclick="confirmLogin()" style="display:none;">已登录</button>
-                    <button class="btn btn-blue" id="readyBtn" onclick="confirmReady()" style="display:none;">页面就绪</button>
-                    <div style="flex:1"></div>
-                    <button class="btn btn-sm" style="background:#333;color:#ccc;" onclick="forceScreenshot()">刷新画面</button>
-                    <button class="btn btn-sm" style="background:#333;color:#ccc;" onclick="scrollB('up')">↑ 上滚</button>
-                    <button class="btn btn-sm" style="background:#333;color:#ccc;" onclick="scrollB('down')">↓ 下滚</button>
-                </div>
-                <div class="keyboard-bar">
-                    <button class="btn" onclick="sendKey('enter')">Enter</button>
-                    <button class="btn" onclick="sendKey('tab')">Tab</button>
-                    <button class="btn" onclick="sendKey('backspace')">Back</button>
-                    <button class="btn" onclick="sendKey('escape')">Esc</button>
-                    <button class="btn" onclick="sendKey('space')">Space</button>
-                    <input type="text" id="typeInput" placeholder="输入文字回车发送" onkeydown="if(event.key==='Enter'){sendType(this.value);this.value=''}">
-                </div>
-            </div>
-        </div>
-
         <!-- 状态 -->
         <div class="section" id="controlSection" style="display:none;">
             <div class="section-label">实时状态</div>
             <div class="card">
                 <div class="status-box" id="statusBox"><span class="status-dot dot-yellow"></span>等待开始...</div>
+                <div class="btn-group" id="actionBtns" style="display:none;"></div>
                 <div class="progress-detail" id="progressDetail" style="display:none;">
                     <span>进度: <span class="done" id="pDone">0</span> / <span class="total" id="pTotal">0</span></span>
                     <span>满分: <span id="pMax">100</span>分</span>
@@ -229,18 +178,18 @@
             <div class="section-label" id="locateLabel">元素定位</div>
             <div class="card">
                 <div id="locateAuto" style="display:none;">
-                    <div style="font-size:.85rem;margin-bottom:.8rem;color:var(--text-muted);" id="detectedInfo">正在检测...</div>
+                    <div class="locate-info" id="detectedInfo">正在检测...</div>
                     <div class="btn-group">
                         <button class="btn btn-green" onclick="confirmLocate()">确认定位</button>
                         <button class="btn btn-blue" onclick="redoLocate()">重新检测</button>
                     </div>
                 </div>
                 <div id="locateManual" style="display:none;">
-                    <div style="font-size:.85rem;margin-bottom:.8rem;color:var(--text-muted);" id="manualHint">请点击画面中的打分框位置</div>
-                    <div id="manualStatus" style="font-size:.82rem;font-family:var(--font-mono);margin-bottom:.6rem;"></div>
+                    <div class="locate-info" id="manualHint">标记工具已注入浏览器页面</div>
+                    <div id="manualStatus" class="locate-info"></div>
                     <div class="btn-group">
                         <button class="btn btn-green" id="confirmLocateBtn" onclick="confirmLocate()" style="display:none;">确认定位</button>
-                        <button class="btn btn-blue btn-sm" onclick="resetManualMark()">重新标记</button>
+                        <button class="btn btn-blue btn-sm" onclick="redoLocate()">重新标记</button>
                     </div>
                 </div>
             </div>
@@ -254,14 +203,107 @@
                 <div id="results"></div>
             </div>
         </div>
+
+        <!-- 历史结果 -->
+        <div id="historySection" style="display:none;"></div>
     </div>
 
 <script>
-var pollTimer=null,imgPollTimer=null,logLines=[],curMaxScore=100,locateMode="auto",markPhase="",dragStartX=0,dragStartY=0,dragThreshold=8;
+var pollTimer=null,logLines=[],curMaxScore=100,locateMode="auto",renderedCount=0,lastResultsLen=0;
+
+// ============ localStorage 持久化 ============
+var LS_PREFIX='ag_';
+var LS_KEYS=['apiKey','apiBase','model','reference','maxScore','count','browser','locateMode'];
+
+function saveFormToStorage(){
+    try{
+        localStorage.setItem(LS_PREFIX+'apiKey',document.getElementById('apiKey').value);
+        localStorage.setItem(LS_PREFIX+'apiBase',document.getElementById('apiBase').value);
+        localStorage.setItem(LS_PREFIX+'model',document.getElementById('modelName').value);
+        localStorage.setItem(LS_PREFIX+'reference',document.getElementById('reference').value);
+        localStorage.setItem(LS_PREFIX+'maxScore',document.getElementById('maxScore').value);
+        localStorage.setItem(LS_PREFIX+'count',document.getElementById('count').value);
+        var br=document.querySelector('input[name="browser"]:checked');
+        if(br)localStorage.setItem(LS_PREFIX+'browser',br.value);
+        localStorage.setItem(LS_PREFIX+'locateMode',locateMode);
+    }catch(e){}
+}
+
+function loadFormFromStorage(){
+    try{
+        var v;
+        v=localStorage.getItem(LS_PREFIX+'apiKey');if(v!==null)document.getElementById('apiKey').value=v;
+        v=localStorage.getItem(LS_PREFIX+'apiBase');if(v!==null)document.getElementById('apiBase').value=v;
+        v=localStorage.getItem(LS_PREFIX+'model');if(v!==null)document.getElementById('modelName').value=v;
+        v=localStorage.getItem(LS_PREFIX+'reference');if(v!==null)document.getElementById('reference').value=v;
+        v=localStorage.getItem(LS_PREFIX+'maxScore');if(v!==null)document.getElementById('maxScore').value=v;
+        v=localStorage.getItem(LS_PREFIX+'count');if(v!==null)document.getElementById('count').value=v;
+        v=localStorage.getItem(LS_PREFIX+'browser');
+        if(v==='edge'){
+            var opts=document.querySelectorAll('.browser-opt');
+            opts.forEach(function(o){o.classList.remove('selected')});
+            opts[1].classList.add('selected');opts[1].querySelector('input').checked=true;
+        }
+        v=localStorage.getItem(LS_PREFIX+'locateMode');
+        if(v==='manual'){
+            locateMode='manual';
+            var groups=document.querySelectorAll('.browser-select');
+            var locGroup=groups[1];
+            if(locGroup){
+                var locOpts=locGroup.querySelectorAll('.browser-opt');
+                locOpts.forEach(function(o){o.classList.remove('selected')});
+                locOpts[1].classList.add('selected');locOpts[1].querySelector('input').checked=true;
+            }
+        }
+    }catch(e){}
+}
+
+// ============ 加载历史批改结果 ============
+function loadLastSession(){
+    fetch('/api/auto/last-session').then(function(r){return r.json()}).then(function(d){
+        if(d.empty)return;
+        var box=document.getElementById('historySection');
+        if(!box)return;
+        box.style.display='block';
+        var html='<div class="card" style="margin-bottom:1.5rem;">';
+        html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem;">';
+        html+='<span style="font-size:.82rem;font-family:var(--font-mono);color:var(--text-muted);">上次批改: '+d.time+'</span>';
+        html+='<span style="font-size:.72rem;font-family:var(--font-mono);color:var(--text-muted);">满分 '+d.max_score+'分</span></div>';
+        html+='<div class="stats"><div class="stat-card"><div class="stat-value" style="color:var(--accent)">'+d.avg_score+'</div><div class="stat-label">平均分/'+d.max_score+'</div></div>';
+        html+='<div class="stat-card"><div class="stat-value" style="color:var(--green)">'+d.max_score_val+'</div><div class="stat-label">最高分/'+d.max_score+'</div></div>';
+        html+='<div class="stat-card"><div class="stat-value" style="color:var(--red)">'+d.min_score_val+'</div><div class="stat-label">最低分/'+d.max_score+'</div></div></div>';
+        html+='<div style="font-size:.78rem;font-family:var(--font-mono);color:var(--text-muted);margin-bottom:.4rem;">成功 '+d.success+'/'+d.total+' 份</div>';
+        if(d.recent_results&&d.recent_results.length>0){
+            html+='<div style="font-size:.78rem;font-family:var(--font-mono);color:var(--text-muted);margin-bottom:.3rem;">最近答卷:</div>';
+            for(var i=0;i<Math.min(d.recent_results.length,5);i++){
+                var r=d.recent_results[i];
+                if(r.success&&r.data){
+                    html+='<div style="font-size:.82rem;padding:.25rem 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;">';
+                    html+='<span>'+r.student+'</span><span class="badge badge-score">'+r.data.score+'/'+(r.data.max_score||d.max_score)+'</span></div>';
+                }
+            }
+        }
+        html+='</div>';
+        box.innerHTML=html;
+    }).catch(function(){});
+}
 
 function pickBrowser(el){document.querySelectorAll('.browser-opt').forEach(function(e){e.classList.remove('selected')});el.classList.add('selected');el.querySelector('input').checked=true}
 function pickLocate(el){var group=el.closest('.browser-select');group.querySelectorAll('.browser-opt').forEach(function(e){e.classList.remove('selected')});el.classList.add('selected');el.querySelector('input').checked=true;locateMode=el.querySelector('input').value}
 function toggleLog(){var b=document.getElementById('logBox');b.style.display=b.style.display==='none'?'block':'none'}
+function toggleRef(){var b=document.getElementById('refEditBox');b.style.display=b.style.display==='none'?'block':'none'}
+
+function saveReference(){
+    var ref=document.getElementById('refEdit').value.trim();
+    if(!ref){alert('批改标准不能为空');return}
+    fetch('/api/auto/update-reference',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reference:ref})})
+    .then(function(r){return r.json()}).then(function(d){
+        if(d.error){alert(d.error);return}
+        document.getElementById('refSaveStatus').textContent='已更新 '+new Date().toLocaleTimeString();
+        setTimeout(function(){document.getElementById('refSaveStatus').textContent=''},3000);
+        addLog('批改标准已更新');
+    });
+}
 
 function startGrading(){
     var apiKey=document.getElementById('apiKey').value.trim();
@@ -277,47 +319,50 @@ function startGrading(){
     if(!ref){alert('请填写参考答案');return}
     if(!cnt||cnt<1){alert('请输入批改份数');return}
     curMaxScore=ms;
+    renderedCount=0;lastResultsLen=0;
     document.getElementById('startBtn').disabled=true;
     document.getElementById('startBtn').innerHTML='<span class="spinner"></span> 启动中...';
     document.getElementById('stopBtn').style.display='inline-flex';
     document.getElementById('controlSection').style.display='block';
-    document.getElementById('browserSection').style.display='block';
     document.getElementById('logBox').style.display='block';
     document.getElementById('progressDetail').style.display='flex';
-    document.getElementById('refToggle').style.display='block';
-    document.getElementById('refEdit').value=ref;
     document.getElementById('pTotal').textContent=cnt;
     document.getElementById('pMax').textContent=ms;
+    document.getElementById('refToggle').style.display='block';
+    document.getElementById('refEdit').value=ref;
+    document.getElementById('resultsSection').style.display='block';
+    document.getElementById('results').innerHTML='';
+    document.getElementById('stats').innerHTML='';
     logLines=[];addLog('正在启动（满分'+ms+'分，共'+cnt+'份）...');
-    fetch('/api/auto/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reference:ref,count:cnt,browser:br,api_key:apiKey,api_base:apiBase,model:model,max_score:ms,locate_mode:locateMode})}).then(function(r){return r.json()}).then(function(d){if(d.error){alert(d.error);resetBtn();return}pollTimer=setInterval(pollStatus,1500);imgPollTimer=setInterval(pollScreenshot,800)}).catch(function(e){alert('启动失败: '+e.message);resetBtn()});
+    fetch('/api/auto/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reference:ref,count:cnt,browser:br,api_key:apiKey,api_base:apiBase,model:model,max_score:ms,locate_mode:locateMode})}).then(function(r){return r.json()}).then(function(d){if(d.error){alert(d.error);resetBtn();return}pollTimer=setInterval(pollStatus,1500)}).catch(function(e){alert('启动失败: '+e.message);resetBtn()});
 }
 function resetBtn(){document.getElementById('startBtn').disabled=false;document.getElementById('startBtn').innerHTML='开始自动阅卷';document.getElementById('stopBtn').style.display='none'}
 
-function pollStatus(){fetch('/api/auto/status').then(function(r){return r.json()}).then(function(s){updateUI(s);if(s.message)addLog(s.message);if(s.status==='finished'||s.status==='error'||s.status==='idle'||s.status==='stopped'){clearInterval(pollTimer);clearInterval(imgPollTimer);resetBtn();if(s.status==='finished'||(s.results&&s.results.length>0)){renderResults(s.results||[]);setStep(6)}}})}
-function pollScreenshot(){fetch('/api/auto/screenshot').then(function(r){return r.json()}).then(function(d){if(d.image){document.getElementById('livePlaceholder').style.display='none';var img=document.getElementById('liveImg');img.style.display='block';img.src=d.image}})}
+function pollStatus(){fetch('/api/auto/status').then(function(r){return r.json()}).then(function(s){updateUI(s);if(s.message)addLog(s.message);if(s.status==='finished'||s.status==='error'||s.status==='idle'||s.status==='stopped'){clearInterval(pollTimer);resetBtn();updateStats(s.results||[]);setStep(6)}})}
 
 function updateUI(s){
     document.getElementById('statusBox').innerHTML='<span class="status-dot '+dotClass(s.status)+'"></span>'+(s.message||'...');
     var idx={starting:1,login_waiting:2,auto_login_detected:2,login_confirmed:2,page_waiting:3,page_confirmed:3,detecting:4,locating:4,locate_confirmed:4,running:5,finished:6,error:6,idle:0,stopped:6}[s.status]||0;
     for(var i=1;i<=6;i++){var el=document.getElementById('st'+i);if(i<idx)el.className='step done';else if(i===idx)el.className='step active';else el.className='step'}
-    var lb=document.getElementById('loginBtn'),rb=document.getElementById('readyBtn'),lh=document.getElementById('loginHint');
-    lb.style.display='none';rb.style.display='none';lh.style.display='none';
-    if(s.status==='login_waiting'||s.status==='auto_login_detected'){lb.style.display='inline-flex';lb.disabled=false;lb.innerHTML='已登录';lh.style.display='block'}
-    else if(s.status==='page_waiting'){rb.style.display='inline-flex';rb.disabled=false;rb.innerHTML='页面就绪'}
+    updateStepHint(s);
+    updateActionBtns(s);
     var ls=document.getElementById('locateSection');
     if(s.status==='locating'){
         ls.style.display='block';
         if(s.locate_mode==='auto'){
             document.getElementById('locateAuto').style.display='block';
             document.getElementById('locateManual').style.display='none';
-            document.getElementById('locateLabel').textContent='自动定位确认';
+            document.getElementById('locateLabel').textContent='自动定位确认（浏览器页面已高亮标记）';
             if(s.detected_info)renderDetectedInfo(s.detected_info);
         }else{
             document.getElementById('locateAuto').style.display='none';
             document.getElementById('locateManual').style.display='block';
             document.getElementById('locateLabel').textContent='手动标记定位';
-            if(s.locate_phase==='manual_mark_score'){markPhase='score';document.getElementById('manualHint').textContent='请点击画面中的打分框位置'}
-            else if(s.locate_phase==='manual_mark_submit'){markPhase='submit';document.getElementById('manualHint').textContent='请点击提交按钮位置'}
+            var phase=s.locate_phase||'';
+            if(phase==='manual_mark_score'){document.getElementById('manualHint').innerHTML='<span class="browser-tag">浏览器</span>请在浏览器页面中点击<b>打分框</b>位置'}
+            else if(phase==='manual_mark_submit'){document.getElementById('manualHint').innerHTML='<span class="browser-tag">浏览器</span>请在浏览器页面中点击<b>提交按钮</b>位置'}
+            else if(phase==='manual_done'||phase==='awaiting_confirm'){document.getElementById('manualHint').innerHTML='标记完成，请确认';document.getElementById('confirmLocateBtn').style.display='inline-flex'}
+            if(s.score_pos)document.getElementById('manualStatus').innerHTML='<span style="color:var(--green)">✓ 打分框: ('+s.score_pos.x+', '+s.score_pos.y+')</span>'+(s.submit_pos?'<br><span style="color:var(--green)">✓ 提交按钮: ('+s.submit_pos.x+', '+s.submit_pos.y+')</span>':'');
         }
     }else{ls.style.display='none'}
     if(s.total>0){
@@ -328,7 +373,38 @@ function updateUI(s){
         document.getElementById('pPercent').textContent=pct+'%';
     }
     if(s.max_score){curMaxScore=s.max_score;document.getElementById('pMax').textContent=s.max_score}
-    if(s.results&&s.results.length>0)renderResults(s.results);
+    if(s.results&&s.results.length>0)appendResults(s.results);
+}
+
+function updateStepHint(s){
+    var h=document.getElementById('stepHint');
+    var msgs={
+        starting:'正在启动浏览器，请稍候...',
+        login_waiting:'<span class="browser-tag">浏览器</span>请在<b>浏览器窗口</b>中登录智学网。登录完成后，在此网页点击「已登录」。',
+        auto_login_detected:'<span class="browser-tag">浏览器</span>检测到已登录，请确认。',
+        login_confirmed:'登录已确认，正在跳转...',
+        page_waiting:'<span class="browser-tag">浏览器</span>请在<b>浏览器窗口</b>中进入阅卷页面（能看到答题卡和评分区域），完成后在此网页点击「页面就绪」。',
+        page_confirmed:'页面已确认，正在分析...',
+        detecting:'正在分析页面元素...',
+        locating: s.locate_mode==='auto'?'自动检测完成，请在下方确认定位结果。':'<span class="browser-tag">浏览器</span>请在<b>浏览器页面</b>上点击标记打分框和提交按钮位置。',
+        running:'批改进行中，可随时修改批改标准。',
+        finished:'批改已完成！',
+        error:'出现错误，请检查日志。'
+    };
+    var msg=msgs[s.status];
+    if(msg){h.innerHTML=msg;h.style.display='block'}else{h.style.display='none'}
+}
+
+function updateActionBtns(s){
+    var box=document.getElementById('actionBtns');
+    box.innerHTML='';box.style.display='none';
+    if(s.status==='login_waiting'||s.status==='auto_login_detected'){
+        box.style.display='flex';
+        box.innerHTML='<button class="btn btn-green" onclick="confirmLogin()">已登录</button>';
+    }else if(s.status==='page_waiting'){
+        box.style.display='flex';
+        box.innerHTML='<button class="btn btn-blue" onclick="confirmReady()">页面就绪</button>';
+    }
 }
 
 function dotClass(st){if(st==='finished')return 'dot-green';if(st==='error'||st==='stopped')return 'dot-red';return 'dot-yellow'}
@@ -352,111 +428,64 @@ function renderDetectedInfo(info){
 }
 function addLog(msg){var t=new Date().toLocaleTimeString();logLines.push('['+t+'] '+msg);if(logLines.length>100)logLines=logLines.slice(-50);var box=document.getElementById('logBox');box.innerHTML=logLines.map(function(l){return '<div class="log-line">'+l+'</div>'}).join('');box.scrollTop=box.scrollHeight}
 
-function toggleRef(){var b=document.getElementById('refEditBox');b.style.display=b.style.display==='none'?'block':'none'}
-function saveReference(){
-    var ref=document.getElementById('refEdit').value.trim();
-    if(!ref){alert('批改标准不能为空');return}
-    fetch('/api/auto/update-reference',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reference:ref})})
-    .then(function(r){return r.json()}).then(function(d){
-        if(d.error){alert(d.error);return}
-        document.getElementById('refSaveStatus').textContent='已更新 '+new Date().toLocaleTimeString();
-        setTimeout(function(){document.getElementById('refSaveStatus').textContent=''},3000);
-        addLog('批改标准已更新');
-    });
-}
-function confirmLogin(){fetch('/api/auto/confirm-login',{method:'POST'});document.getElementById('loginBtn').disabled=true;document.getElementById('loginBtn').textContent='已确认';addLog('已确认登录')}
-function confirmReady(){fetch('/api/auto/confirm-ready',{method:'POST'});document.getElementById('readyBtn').disabled=true;document.getElementById('readyBtn').textContent='已确认';addLog('已确认页面就绪')}
-function confirmLocate(){fetch('/api/auto/confirm-locate',{method:'POST'});clearPersistentMarkers();addLog('已确认定位')}
-function redoLocate(){fetch('/api/auto/redo-locate',{method:'POST'});clearPersistentMarkers();addLog('重新检测中...')}
-function resetManualMark(){markPhase="score";clearPersistentMarkers();document.getElementById('manualStatus').innerHTML='';document.getElementById('confirmLocateBtn').style.display='none';document.getElementById('manualHint').textContent='请点击画面中的打分框位置';addLog('已重置手动标记')}
+function confirmLogin(){fetch('/api/auto/confirm-login',{method:'POST'});addLog('已确认登录')}
+function confirmReady(){fetch('/api/auto/confirm-ready',{method:'POST'});addLog('已确认页面就绪')}
+function confirmLocate(){fetch('/api/auto/confirm-locate',{method:'POST'});addLog('已确认定位')}
+function redoLocate(){fetch('/api/auto/redo-locate',{method:'POST'});addLog('重新检测中...')}
 function stopGrading(){fetch('/api/auto/stop',{method:'POST'}).then(function(){document.getElementById('stopBtn').style.display='none';addLog('已停止')})}
-function forceScreenshot(){fetch('/api/auto/force-screenshot',{method:'POST'});addLog('刷新画面')}
 
-function remotePost(url,data){return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})}
+// ============ 增量结果渲染 ============
 
-function addPersistentMarker(viewport,left,top,label,id){
-    var old=document.getElementById(id);if(old)old.remove();
-    var m=document.createElement('div');m.className='persistent-marker';m.id=id;
-    m.style.left=left+'px';m.style.top=top+'px';
-    m.innerHTML='<div class="pm-ring"></div><div class="pm-cross"></div><div class="pm-label">'+label+'</div>';
-    viewport.appendChild(m);
-}
-function clearPersistentMarkers(){document.querySelectorAll('.persistent-marker').forEach(function(e){e.remove()})}
-
-function handleMouseDown(e){
-    e.preventDefault();
-    var viewport=document.getElementById('viewport');
-    var rect=viewport.getBoundingClientRect();
-    dragStartX=e.clientX-rect.left;
-    dragStartY=e.clientY-rect.top;
-    viewport.style.cursor='grabbing';
-}
-function handleMouseUp(e){
-    var viewport=document.getElementById('viewport');
-    viewport.style.cursor='crosshair';
-    var img=document.getElementById('liveImg');
-    if(!img.src||img.style.display==='none')return;
-    var rect=viewport.getBoundingClientRect();
-    var endX=e.clientX-rect.left,endY=e.clientY-rect.top;
-    var dx=endX-dragStartX,dy=endY-dragStartY;
-    var dist=Math.sqrt(dx*dx+dy*dy);
-    var imgRect=img.getBoundingClientRect();
-    var scaleX=img.naturalWidth/imgRect.width,scaleY=img.naturalHeight/imgRect.height;
-    if(dist<dragThreshold){
-        var clickX=dragStartX+viewport.scrollLeft,clickY=dragStartY+viewport.scrollTop;
-        var bx=Math.round(clickX*scaleX),by=Math.round(clickY*scaleY);
-        var px=dragStartX,py=dragStartY;
-        if(markPhase==='score'){
-            addPersistentMarker(viewport,px,py,'打分框','pm-score');
-            remotePost('/api/auto/mark-score',{x:bx,y:by});
-            document.getElementById('manualStatus').innerHTML='<span style="color:var(--green)">✓ 打分框: ('+bx+', '+by+')</span>';
-            document.getElementById('manualHint').textContent='请点击提交按钮位置';
-            markPhase='submit';
-            addLog('标记打分框: ('+bx+','+by+')');
-        }else if(markPhase==='submit'){
-            addPersistentMarker(viewport,px,py,'提交按钮','pm-submit');
-            remotePost('/api/auto/mark-submit',{x:bx,y:by});
-            document.getElementById('manualStatus').innerHTML+='<br><span style="color:var(--green)">✓ 提交按钮: ('+bx+', '+by+')</span>';
-            document.getElementById('manualHint').textContent='请确认或调整标记位置';
-            document.getElementById('confirmLocateBtn').style.display='inline-flex';
-            markPhase='done';
-            addLog('标记提交按钮: ('+bx+','+by+')');
-        }else{
-            var marker=document.createElement('div');
-            marker.className='click-marker';marker.style.left=px+'px';marker.style.top=py+'px';
-            viewport.appendChild(marker);setTimeout(function(){marker.remove()},600);
-            remotePost('/api/remote/click',{x:bx,y:by});
-            addLog('点击: ('+bx+','+by+')');
-        }
-    }else{
-        var sx=Math.round(dragStartX*scaleX),sy=Math.round(dragStartY*scaleY);
-        var ex=Math.round(endX*scaleX),ey=Math.round(endY*scaleY);
-        remotePost('/api/remote/drag',{startX:sx,startY:sy,endX:ex,endY:ey});
-        addLog('拖拽: ('+sx+','+sy+') → ('+ex+','+ey+')');
-    }
-}
-function sendType(text){if(!text.trim())return;remotePost('/api/remote/type',{text:text});addLog('输入: '+text)}
-function sendKey(key){remotePost('/api/remote/key',{key:key});addLog('按键: '+key)}
-function scrollB(dir){remotePost('/api/remote/scroll',{direction:dir,amount:300});addLog('滚动: '+dir)}
-function navTo(url){remotePost('/api/remote/navigate',{url:url});addLog('导航: '+url)}
-function goBack(){remotePost('/api/remote/back',{});addLog('后退')}
-
-function renderResults(results){
-    var sec=document.getElementById('resultsSection');sec.style.display='block';
-    var sd=document.getElementById('stats'),rd=document.getElementById('results');
-    var ok=results.filter(function(r){return r.success});
-    var avg=ok.length>0?Math.round(ok.reduce(function(s,r){return s+(r.data.score||0)},0)/ok.length):0;
-    var mx=ok.length>0?Math.max.apply(null,ok.map(function(r){return r.data.score||0})):0;
-    var mn=ok.length>0?Math.min.apply(null,ok.map(function(r){return r.data.score||0})):0;
-    sd.innerHTML='<div class="stat-card"><div class="stat-value" style="color:var(--accent)">'+avg+'</div><div class="stat-label">平均分/'+curMaxScore+'</div></div><div class="stat-card"><div class="stat-value" style="color:var(--green)">'+mx+'</div><div class="stat-label">最高分/'+curMaxScore+'</div></div><div class="stat-card"><div class="stat-value" style="color:var(--red)">'+mn+'</div><div class="stat-label">最低分/'+curMaxScore+'</div></div>';
-    rd.innerHTML='';
-    for(var i=0;i<results.length;i++){
+function appendResults(results){
+    var rd=document.getElementById('results');
+    // 更新或追加结果
+    for(var i=renderedCount;i<results.length;i++){
         var r=results[i],id='ar-'+i;
-        if(!r.success){rd.innerHTML+='<div class="result-card" style="border-color:var(--red)"><div class="result-header"><span>'+r.student+'</span><span class="badge badge-error">失败: '+r.error+'</span></div></div>';continue}
-        var d=r.data;
-        rd.innerHTML+='<div class="result-card"><div class="result-header" onclick="document.getElementById(\''+id+'\').classList.toggle(\'open\')"><span>'+r.student+'</span><div style="display:flex;gap:.4rem;align-items:center"><span class="badge badge-score">'+d.score+'/'+(d.max_score||curMaxScore)+'</span><span class="badge badge-grade">'+d.grade+'</span><span style="font-size:.65rem;color:var(--text-muted)">v</span></div></div><div class="result-body" id="'+id+'"><div style="margin-bottom:.4rem"><b>识别:</b> '+(d.recognized_text||'')+'</div><div style="margin-bottom:.4rem"><b>评价:</b> '+(d.summary||'')+'</div><div><b>评语:</b> '+(d.detailed_comment||'')+'</div></div></div>';
+        var card=document.createElement('div');card.className='result-card';card.id=id;
+        if(!r.success){
+            card.innerHTML='<div class="result-header" onclick="this.parentElement.querySelector(\'.result-body\').classList.toggle(\'open\')"><span>'+r.student+'</span><span class="badge badge-error">失败: '+r.error+'</span></div><div class="result-body"></div>';
+        }else{
+            var d=r.data;
+            card.innerHTML='<div class="result-header" onclick="this.parentElement.querySelector(\'.result-body\').classList.toggle(\'open\')"><span>'+r.student+'</span><div style="display:flex;gap:.4rem;align-items:center"><span class="badge badge-score">'+d.score+'/'+(d.max_score||curMaxScore)+'</span><span class="badge badge-grade">'+d.grade+'</span><span style="font-size:.65rem;color:var(--text-muted)">▸</span></div></div><div class="result-body"><div style="margin-bottom:.4rem"><b>识别:</b> '+(d.recognized_text||'')+'</div><div style="margin-bottom:.4rem"><b>评价:</b> '+(d.summary||'')+'</div><div><b>评语:</b> '+(d.detailed_comment||'')+'</div></div>';
+        }
+        rd.appendChild(card);
     }
+    renderedCount=results.length;
+    // 更新最后一个结果（重试可能改变状态）
+    if(results.length>0&&results.length===lastResultsLen){
+        var last=results[results.length-1];
+        var lastCard=document.getElementById('ar-'+(results.length-1));
+        if(lastCard&&last.success){
+            var d=last.data;
+            lastCard.innerHTML='<div class="result-header" onclick="this.parentElement.querySelector(\'.result-body\').classList.toggle(\'open\')"><span>'+last.student+'</span><div style="display:flex;gap:.4rem;align-items:center"><span class="badge badge-score">'+d.score+'/'+(d.max_score||curMaxScore)+'</span><span class="badge badge-grade">'+d.grade+'</span><span style="font-size:.65rem;color:var(--text-muted)">▸</span></div></div><div class="result-body"><div style="margin-bottom:.4rem"><b>识别:</b> '+(d.recognized_text||'')+'</div><div style="margin-bottom:.4rem"><b>评价:</b> '+(d.summary||'')+'</div><div><b>评语:</b> '+(d.detailed_comment||'')+'</div></div>';
+        }
+    }
+    lastResultsLen=results.length;
+    updateStats(results);
 }
+
+function updateStats(results){
+    var sd=document.getElementById('stats');
+    var ok=results.filter(function(r){return r.success});
+    if(ok.length===0){sd.innerHTML='';return}
+    var avg=Math.round(ok.reduce(function(s,r){return s+(r.data.score||0)},0)/ok.length);
+    var mx=Math.max.apply(null,ok.map(function(r){return r.data.score||0}));
+    var mn=Math.min.apply(null,ok.map(function(r){return r.data.score||0}));
+    sd.innerHTML='<div class="stat-card"><div class="stat-value" style="color:var(--accent)">'+avg+'</div><div class="stat-label">平均分/'+curMaxScore+'</div></div><div class="stat-card"><div class="stat-value" style="color:var(--green)">'+mx+'</div><div class="stat-label">最高分/'+curMaxScore+'</div></div><div class="stat-card"><div class="stat-value" style="color:var(--red)">'+mn+'</div><div class="stat-label">最低分/'+curMaxScore+'</div></div>';
+}
+
+// ============ 页面初始化 ============
+document.addEventListener('DOMContentLoaded',function(){
+    loadFormFromStorage();
+    loadLastSession();
+});
+
+// startGrading 时保存表单
+var _origStartGrading=startGrading;
+startGrading=function(){
+    saveFormToStorage();
+    _origStartGrading();
+};
 </script>
 </body>
 </html>

@@ -296,6 +296,27 @@
         let selectedFiles = [];
         let lastResults = [];
 
+        // ============ localStorage 持久化 ============
+        function saveManualForm(){
+            try{
+                localStorage.setItem('ag_manual_apiKey',document.getElementById('apiKey').value);
+                localStorage.setItem('ag_manual_apiBase',document.getElementById('apiBase').value);
+                localStorage.setItem('ag_manual_model',document.getElementById('model').value);
+                localStorage.setItem('ag_manual_visionModel',document.getElementById('visionModel').value);
+                localStorage.setItem('ag_manual_reference',document.getElementById('reference').value);
+            }catch(e){}
+        }
+        function loadManualForm(){
+            try{
+                var v;
+                v=localStorage.getItem('ag_manual_apiKey');if(v!==null)document.getElementById('apiKey').value=v;
+                v=localStorage.getItem('ag_manual_apiBase');if(v!==null)document.getElementById('apiBase').value=v;
+                v=localStorage.getItem('ag_manual_model');if(v!==null)document.getElementById('model').value=v;
+                v=localStorage.getItem('ag_manual_visionModel');if(v!==null)document.getElementById('visionModel').value=v;
+                v=localStorage.getItem('ag_manual_reference');if(v!==null)document.getElementById('reference').value=v;
+            }catch(e){}
+        }
+
         function toggleApiConfig() {
             const fields = document.getElementById('apiConfigFields');
             const text = document.getElementById('toggleText');
@@ -354,6 +375,8 @@
             const apiBase = document.getElementById('apiBase').value.trim();
             const model = document.getElementById('model').value.trim();
             const visionModel = document.getElementById('visionModel').value.trim();
+
+            saveManualForm();
 
             if (!apiKey) { alert('请填写 API Key'); toggleApiConfig(); return; }
             if (!reference) { alert('请填写参考答案'); return; }
@@ -442,6 +465,11 @@
                 document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
             } catch (err) { alert('导出失败: ' + err.message); }
         }
+
+        // 页面加载时恢复表单
+        document.addEventListener('DOMContentLoaded', function(){
+            loadManualForm();
+        });
     </script>
 </body>
 </html>

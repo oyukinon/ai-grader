@@ -140,26 +140,6 @@ def auto_status():
     return jsonify(auto_grader.get_state())
 
 
-@app.route("/api/auto/screenshot")
-def auto_screenshot():
-    """实时画面 — 优先用快速截图"""
-    import auto_grader
-    state = auto_grader.get_state()
-    # 优先返回快速截图（JPEG，小且快）
-    fast = state.get("fast_screenshot", "")
-    if fast:
-        return jsonify({"image": fast})
-    # 备选：评分截图
-    path = state.get("latest_screenshot", "")
-    if path and os.path.exists(path):
-        with open(path, "rb") as f:
-            data = f.read()
-        b64 = base64.b64encode(data).decode("utf-8")
-        return jsonify({"image": "data:image/png;base64," + b64})
-    return jsonify({"image": ""})
-
-
-
 @app.route("/api/auto/confirm-login", methods=["POST"])
 def auto_confirm_login():
     import auto_grader
@@ -219,6 +199,13 @@ def auto_mark_submit():
     return jsonify({"ok": ok})
 
 
+@app.route("/api/auto/overlay-done", methods=["POST"])
+def auto_overlay_done():
+    import auto_grader
+    ok = auto_grader.overlay_done()
+    return jsonify({"ok": ok})
+
+
 @app.route("/api/auto/stop", methods=["POST"])
 def auto_stop():
     import auto_grader
@@ -226,77 +213,13 @@ def auto_stop():
     return jsonify({"ok": True})
 
 
-@app.route("/api/remote/click", methods=["POST"])
-def remote_click():
+@app.route("/api/auto/last-session")
+def auto_last_session():
     import auto_grader
-    data = request.get_json()
-    x = int(data.get("x", 0))
-    y = int(data.get("y", 0))
-    ok = auto_grader.click_at(x, y)
-    return jsonify({"ok": ok})
-
-
-@app.route("/api/remote/type", methods=["POST"])
-def remote_type():
-    import auto_grader
-    data = request.get_json()
-    text = data.get("text", "")
-    ok = auto_grader.type_text(text)
-    return jsonify({"ok": ok})
-
-
-@app.route("/api/remote/key", methods=["POST"])
-def remote_key():
-    import auto_grader
-    data = request.get_json()
-    key = data.get("key", "")
-    ok = auto_grader.press_key(key)
-    return jsonify({"ok": ok})
-
-
-@app.route("/api/remote/scroll", methods=["POST"])
-def remote_scroll():
-    import auto_grader
-    data = request.get_json()
-    direction = data.get("direction", "down")
-    amount = int(data.get("amount", 300))
-    ok = auto_grader.scroll_browser(direction, amount)
-    return jsonify({"ok": ok})
-
-
-@app.route("/api/remote/navigate", methods=["POST"])
-def remote_navigate():
-    import auto_grader
-    data = request.get_json()
-    url = data.get("url", "")
-    ok = auto_grader.navigate_browser(url)
-    return jsonify({"ok": ok})
-
-
-@app.route("/api/remote/back", methods=["POST"])
-def remote_back():
-    import auto_grader
-    ok = auto_grader.go_back_browser()
-    return jsonify({"ok": ok})
-
-
-@app.route("/api/remote/drag", methods=["POST"])
-def remote_drag():
-    import auto_grader
-    data = request.get_json()
-    sx = int(data.get("startX", 0))
-    sy = int(data.get("startY", 0))
-    ex = int(data.get("endX", 0))
-    ey = int(data.get("endY", 0))
-    ok = auto_grader.drag(sx, sy, ex, ey)
-    return jsonify({"ok": ok})
-
-
-@app.route("/api/auto/force-screenshot", methods=["POST"])
-def auto_force_screenshot():
-    import auto_grader
-    auto_grader.force_screenshot()
-    return jsonify({"ok": True})
+    data = auto_grader.load_last_session()
+    if data:
+        return jsonify(data)
+    return jsonify({"empty": True})
 
 
 if __name__ == "__main__":
