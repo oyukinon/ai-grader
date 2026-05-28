@@ -1,4 +1,4 @@
-﻿"""
+"""
 浏览器管理 — 启动前自动关闭残留进程
 """
 
@@ -43,7 +43,7 @@ def create_driver(browser_type="auto"):
 
 
 def _kill_previous_sessions(browser_type):
-    """关闭之前由本工具启动的浏览器残留进程（通过 WMIC 命令行参数精确匹配）"""
+    """关闭之前由本工具启动的浏览器残留进程"""
     profile_name = "edge_profile" if browser_type == "edge" else "chrome_profile"
     base_dir = os.path.dirname(os.path.abspath(__file__))
     profile_path = os.path.join(base_dir, profile_name)
@@ -54,39 +54,28 @@ def _kill_previous_sessions(browser_type):
     process_name = "msedge.exe" if browser_type == "edge" else "chrome.exe"
 
     try:
-        # 使用 WMIC 查询命令行参数，精确匹配使用本项目 profile 的进程
-        wmic_cmd = ["wmic", "process", "where", "name='" + process_name + "'", "get", "ProcessId,CommandLine", "/FORMAT:CSV"]
-        result = subprocess.run(wmic_cmd, capture_output=True, text=True, timeout=10)
+        result = subprocess.run(
+            ["tasklist", "/V", "/FO", "CSV", "/NH"],
+            capture_output=True, text=True, timeout=5
+        )
         killed = 0
         for line in result.stdout.strip().split("\n"):
-            if profile_path not in line and profile_name not in line:
+            if profile_name not in line:
                 continue
-            parts = line.strip().split(",")
+            if process_name not in line:
+                continue
+            parts = line.split(",")
             if len(parts) >= 2:
-                pid_str = parts[-1].strip()
-                if pid_str.isdigit():
-                    subprocess.run(["taskkill", "/PID", pid_str, "/F"], capture_output=True, timeout=5)
+                pid = parts[1].strip().strip('"')
+                if pid.isdigit():
+                    subprocess.run(["taskkill", "/PID", pid, "/F"], capture_output=True, timeout=5)
                     killed += 1
         if killed > 0:
             print("[browser] 关闭了 " + str(killed) + " 个残留 " + process_name + " 进程")
             time.sleep(2)
     except Exception as e:
         print("[browser] 清理残留进程: " + str(e))
-        # WMIC 失败时的兜底：尝试用 tasklist 匹配
-        try:
-            result = subprocess.run(
-                ["tasklist", "/V", "/FO", "CSV", "/NH"],
-                capture_output=True, text=True, timeout=5
-            )
-            for line in result.stdout.strip().split("\n"):
-                if profile_name in line and process_name in line:
-                    parts = line.split(",")
-                    if len(parts) >= 2:
-                        pid = parts[1].strip().strip('"')
-                        if pid.isdigit():
-                            subprocess.run(["taskkill", "/PID", pid, "/F"], capture_output=True, timeout=5)
-        except Exception:
-            pass
+
 
 def _maximize_safe(driver):
     try:
