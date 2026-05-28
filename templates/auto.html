@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -80,6 +80,9 @@
         .locate-info{font-size:.82rem;color:var(--text-secondary);padding:.4rem 0;line-height:1.6}
         .btn-group-wide{display:flex;gap:.5rem;margin-top:.75rem}
         .btn-group-wide .btn{flex:1}
+        .settings-toggle{display:none;margin-bottom:1rem}
+.settings-toggle .btn{width:100%;justify-content:center;background:var(--surface);color:var(--text-secondary);box-shadow:var(--shadow);font-size:.8rem;padding:.45rem .8rem}
+.settings-toggle .btn:hover{color:var(--accent);background:rgba(0,113,227,.04)}
         @media(max-width:640px){.container{padding:1.25rem 1rem 3rem}header h1{font-size:1.6rem}.stats{grid-template-columns:1fr}.form-grid,.form-grid-3,.form-grid-4{grid-template-columns:1fr}.steps{overflow-x:auto}}
     </style>
 </head>
@@ -104,7 +107,8 @@
 
         <div class="step-hint" id="stepHint" style="display:none;"></div>
 
-        <!-- API 配置 -->
+                <!-- 设置区域（任务启动后可折叠） -->
+        <div id="settingsSection"><!-- API 配置 -->
         <div class="section">
             <div class="section-label">API 配置</div>
             <div class="card">
@@ -145,7 +149,13 @@
             </div>
         </div>
 
-        <!-- 状态 -->
+                </div><!-- /settingsSection -->
+
+        <!-- 设置折叠切换按钮（任务启动后显示） -->
+        <div class="settings-toggle" id="settingsToggle">
+            <button class="btn" onclick="toggleSettings()">▶ 显示配置</button>
+        </div>
+<!-- 状态 -->
         <div class="section" id="controlSection" style="display:none;">
             <div class="section-label">实时状态</div>
             <div class="card">
@@ -290,6 +300,22 @@ function loadLastSession(){
     }).catch(function(){});
 }
 
+function toggleSettings(){
+    var sec=document.getElementById('settingsSection');
+    var tog=document.getElementById('settingsToggle');
+    if(sec.style.display==='none'){
+        sec.style.display='block';
+        tog.style.display='none';
+    }else{
+        sec.style.display='none';
+        tog.style.display='block';
+    }
+}
+function scrollToAction(){
+    /* 自动滚动到操作区域，确保用户无需手动上翻 */
+    var el=document.getElementById('controlSection');
+    if(el&&el.style.display!=='none'){el.scrollIntoView({behavior:'smooth',block:'start'})}
+}
 function pickBrowser(el){var group=el.closest('.seg-ctrl');group.querySelectorAll('.seg-opt').forEach(function(e){e.classList.remove('selected')});el.classList.add('selected');el.querySelector('input').checked=true}
 function pickLocate(el){var group=el.closest('.seg-ctrl');group.querySelectorAll('.seg-opt').forEach(function(e){e.classList.remove('selected')});el.classList.add('selected');el.querySelector('input').checked=true;locateMode=el.querySelector('input').value}
 function toggleLog(){var b=document.getElementById('logBox');b.style.display=b.style.display==='none'?'block':'none'}
@@ -337,10 +363,12 @@ function startGrading(){
     document.getElementById('resultsSection').style.display='block';
     document.getElementById('results').innerHTML='';
     document.getElementById('stats').innerHTML='';
+    document.getElementById('settingsSection').style.display='none';
+    document.getElementById('settingsToggle').style.display='block';
     logLines=[];addLog('正在启动（满分'+ms+'分，共'+cnt+'份）...');
     fetch('/api/auto/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reference:ref,count:cnt,browser:br,api_key:apiKey,api_base:apiBase,model:model,max_score:ms,locate_mode:locateMode,target_url:targetUrl})}).then(function(r){return r.json()}).then(function(d){if(d.error){alert(d.error);resetBtn();return}pollTimer=setInterval(pollStatus,1500)}).catch(function(e){alert('启动失败: '+e.message);resetBtn()});
 }
-function resetBtn(){document.getElementById('startBtn').disabled=false;document.getElementById('startBtn').innerHTML='开始自动阅卷';document.getElementById('stopBtn').style.display='none'}
+function resetBtn(){document.getElementById('startBtn').disabled=false;document.getElementById('startBtn').innerHTML='开始自动阅卷';document.getElementById('stopBtn').style.display='none';document.getElementById('settingsSection').style.display='block';document.getElementById('settingsToggle').style.display='none'}
 
 function pollStatus(){fetch('/api/auto/status').then(function(r){return r.json()}).then(function(s){updateUI(s);if(s.message)addLog(s.message);if(s.status==='finished'||s.status==='error'||s.status==='idle'||s.status==='stopped'){clearInterval(pollTimer);resetBtn();updateStats(s.results||[]);setStep(6)}})}
 
@@ -351,7 +379,7 @@ function updateUI(s){
     updateStepHint(s);
     updateActionBtns(s);
     var ls=document.getElementById('locateSection');
-    if(s.status==='locating'){
+    if(s.status==='locating'){scrollToAction();
         ls.style.display='block';
         if(s.locate_mode==='auto'){
             document.getElementById('locateAuto').style.display='block';
@@ -405,11 +433,13 @@ function updateActionBtns(s){
     if(s.status==='login_waiting'){
         box.style.display='flex';
         box.innerHTML='<button class="btn btn-green" onclick="confirmLogin()">已登录</button>';
+        scrollToAction();
     }else if(s.status==='auto_login_detected'){
         confirmLogin();
     }else if(s.status==='page_waiting'){
         box.style.display='flex';
         box.innerHTML='<button class="btn btn-blue" onclick="confirmReady()">页面就绪</button>';
+        scrollToAction();
     }
 }
 

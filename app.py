@@ -1,4 +1,4 @@
-"""
+﻿"""
 AI 改卷系统
 """
 
@@ -209,7 +209,9 @@ def auto_mark_score():
     data = request.get_json()
     x = int(data.get("x", 0))
     y = int(data.get("y", 0))
-    ok = auto_grader.mark_score_pos(x, y)
+    sx = int(data.get("sx", 0))
+    sy = int(data.get("sy", 0))
+    ok = auto_grader.mark_score_pos(x, y, sx, sy)
     return jsonify({"ok": ok})
 
 
@@ -220,7 +222,9 @@ def auto_mark_submit():
     data = request.get_json()
     x = int(data.get("x", 0))
     y = int(data.get("y", 0))
-    ok = auto_grader.mark_submit_pos(x, y)
+    sx = int(data.get("sx", 0))
+    sy = int(data.get("sy", 0))
+    ok = auto_grader.mark_submit_pos(x, y, sx, sy)
     return jsonify({"ok": ok})
 
 

@@ -1,4 +1,4 @@
-"""
+﻿"""
 智学网自动阅卷 — 图片识别 + 覆盖层定位
 """
 
@@ -177,14 +177,14 @@ def update_reference(ref):
     print("[auto] 批改标准已更新")
 
 
-def mark_score_pos(x, y):
+def mark_score_pos(x, y, sx=0, sy=0):
     """
     覆盖层回调：用户在浏览器中点击了打分框位置。
-    保存坐标，将子阶段从「等待点打分框」推进到「等待点提交按钮」。
+    保存坐标和滚动偏移量，将子阶段从「等待点打分框」推进到「等待点提交按钮」。
     """
     status = _get("status")
     if status == "locating":
-        _set("score_pos", {"x": int(x), "y": int(y)})
+        _set("score_pos", {"x": int(x), "y": int(y), "sx": int(sx), "sy": int(sy)})
         phase = _get("locate_phase")
         if phase == "manual_mark_score":
             _set("locate_phase", "manual_mark_submit")
@@ -193,15 +193,15 @@ def mark_score_pos(x, y):
     return False
 
 
-def mark_submit_pos(x, y):
+def mark_submit_pos(x, y, sx=0, sy=0):
     """
     覆盖层回调：用户在浏览器中点击了提交按钮位置。
-    保存坐标，将子阶段设为「manual_done」（两处都已标记）。
+    保存坐标和滚动偏移量，将子阶段设为「manual_done」（两处都已标记）。
     前端轮询到 manual_done 后会显示「确认定位」按钮。
     """
     status = _get("status")
     if status == "locating":
-        _set("submit_pos", {"x": int(x), "y": int(y)})
+        _set("submit_pos", {"x": int(x), "y": int(y), "sx": int(sx), "sy": int(sy)})
         _set("locate_phase", "manual_done")
         _set("message", "两处已标记，请在页面中确认定位")
         return True
@@ -308,7 +308,7 @@ var m=document.createElement('div');m.className='__ago-marker';m.id='__agoMS';
 m.style.left=mx+'px';m.style.top=my+'px';
 m.innerHTML='<div class="__ago-ring"></div><div class="__ago-lbl">打分框</div>';
 mid.appendChild(m);
-__agoPost('/api/auto/mark-score',{{x:vx,y:vy}});
+__agoPost('/api/auto/mark-score',{{x:vx,y:vy,sx:window.pageXOffset,sy:window.pageYOffset}});
 }}else if(!clicks.submit){{
 clicks.submit={{x:vx,y:vy}};
 var old=document.getElementById('__agoMP');if(old)old.remove();
@@ -316,7 +316,7 @@ var m2=document.createElement('div');m2.className='__ago-marker';m2.id='__agoMP'
 m2.style.left=mx+'px';m2.style.top=my+'px';
 m2.innerHTML='<div class="__ago-ring"></div><div class="__ago-lbl">提交按钮</div>';
 mid.appendChild(m2);
-__agoPost('/api/auto/mark-submit',{{x:vx,y:vy}});
+__agoPost('/api/auto/mark-submit',{{x:vx,y:vy,sx:window.pageXOffset,sy:window.pageYOffset}});
 }}else{{
 clicks.score={{x:vx,y:vy}};
 clicks.submit=null;
@@ -326,7 +326,7 @@ var m3=document.createElement('div');m3.className='__ago-marker';m3.id='__agoMS'
 m3.style.left=mx+'px';m3.style.top=my+'px';
 m3.innerHTML='<div class="__ago-ring"></div><div class="__ago-lbl">打分框</div>';
 mid.appendChild(m3);
-__agoPost('/api/auto/mark-score',{{x:vx,y:vy}});
+__agoPost('/api/auto/mark-score',{{x:vx,y:vy,sx:window.pageXOffset,sy:window.pageYOffset}});
 }}
 __agoUpdate();
 }});
@@ -681,9 +681,11 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score, ta
             _set("message", "正在验证标记坐标...")
             print("[auto] 预验证标记坐标...")
             try:
-                # 滚动到顶部，确保视口坐标与标记时一致
-                driver.execute_script("window.scrollTo(0, 0);")
-                time.sleep(0.5)
+                # 恢复标记时的滚动位置，确保视口坐标一致
+                sp_scroll = _get("score_pos")
+                if sp_scroll and "sx" in sp_scroll and "sy" in sp_scroll:
+                    driver.execute_script("window.scrollTo(arguments[0], arguments[1]);", sp_scroll["sx"], sp_scroll["sy"])
+                    time.sleep(0.5)
                 # 验证打分框坐标
                 sp = _get("score_pos")
                 if sp:
@@ -751,10 +753,12 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score, ta
                     except Exception:
                         pass
                     time.sleep(4)
-                    try:
-                        finder.re_detect()
-                    except Exception:
-                        pass
+                    # 手动模式下不重新检测（避免覆盖手动标记的坐标）
+                    if locate_mode != "manual":
+                        try:
+                            finder.re_detect()
+                        except Exception:
+                            pass
                     time.sleep(2)
 
                 _set("message", name + " (" + str(i + 1) + "/" + str(count) + ") 截图中...")
@@ -785,9 +789,7 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score, ta
                 try:
                     if locate_mode == "manual":
                         # 手动模式：用标记的坐标填分和提交
-                        # 先滚动到顶部，确保视口坐标与标记时一致
-                        driver.execute_script("window.scrollTo(0, 0);")
-                        time.sleep(0.5)
+                        # fill_score_manual 和 click_submit_manual 内部会自动恢复滚动位置
                         print("[auto] " + name + " 开始填分 (score=" + str(score) + ")")
                         finder.fill_score_manual(driver, score)
                         time.sleep(0.8)

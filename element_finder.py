@@ -1,4 +1,4 @@
-"""
+﻿"""
 元素定位器 — iframe 上下文管理 + 去重检测 + 使用前重新定位
 """
 
@@ -14,6 +14,8 @@ class ElementFinder:
         self.iframe_index = -1
         self.manual_score_pos = None
         self.manual_submit_pos = None
+        self.manual_score_scroll = None   # 标记打分框时的滚动偏移 {sx, sy}
+        self.manual_submit_scroll = None  # 标记提交按钮时的滚动偏移 {sx, sy}
 
     def _switch_to_context(self):
         """切换到元素所在的 iframe 上下文"""
@@ -347,14 +349,16 @@ class ElementFinder:
         self.driver.switch_to.default_content()
         return info
 
-    def set_manual_score(self, x, y):
+    def set_manual_score(self, x, y, sx=0, sy=0):
         self.manual_score_pos = {"x": int(x), "y": int(y)}
+        self.manual_score_scroll = {"sx": int(sx), "sy": int(sy)}
         self.score_mode = "manual"
-        print("[定位] 手动打分框: (" + str(x) + ", " + str(y) + ")")
+        print("[定位] 手动打分框: (" + str(x) + ", " + str(y) + ") 滚动: (" + str(sx) + ", " + str(sy) + ")")
 
-    def set_manual_submit(self, x, y):
+    def set_manual_submit(self, x, y, sx=0, sy=0):
         self.manual_submit_pos = {"x": int(x), "y": int(y)}
-        print("[定位] 手动提交按钮: (" + str(x) + ", " + str(y) + ")")
+        self.manual_submit_scroll = {"sx": int(sx), "sy": int(sy)}
+        print("[定位] 手动提交按钮: (" + str(x) + ", " + str(y) + ") 滚动: (" + str(sx) + ", " + str(sy) + ")")
 
     def _find_element_at_coord(self, driver, pos):
         el = driver.execute_script(
@@ -431,6 +435,13 @@ class ElementFinder:
         """
         if not self.manual_score_pos:
             raise Exception("未设置打分框位置")
+        # 恢复标记时的滚动位置，确保视口坐标与标记时一致
+        if self.manual_score_scroll:
+            driver.execute_script(
+                "window.scrollTo(arguments[0], arguments[1]);",
+                self.manual_score_scroll["sx"], self.manual_score_scroll["sy"]
+            )
+            time.sleep(0.3)
         score_str = str(int(float(score)))
         el = self._find_element_at_coord_with_iframe(driver, self.manual_score_pos)
         # 验证元素有效性
@@ -470,6 +481,13 @@ class ElementFinder:
         """
         if not self.manual_submit_pos:
             raise Exception("未设置提交按钮位置")
+        # 恢复标记时的滚动位置，确保视口坐标与标记时一致
+        if self.manual_submit_scroll:
+            driver.execute_script(
+                "window.scrollTo(arguments[0], arguments[1]);",
+                self.manual_submit_scroll["sx"], self.manual_submit_scroll["sy"]
+            )
+            time.sleep(0.3)
         el = self._find_element_at_coord_with_iframe(driver, self.manual_submit_pos)
         # 验证元素有效性
         self._validate_element(el, "submit", self.manual_submit_pos)
