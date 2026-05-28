@@ -18,27 +18,39 @@ SCREENSHOT_DIR = os.path.join(BASE_DIR, "screenshots")
 os.makedirs(SCREENSHOT_DIR, exist_ok=True)
 RESULTS_FILE = os.path.join(SCREENSHOT_DIR, "last_session.json")
 
+# ========== 全局状态 ==========
+# 整个自动阅卷流程的状态机，前端通过轮询 /api/auto/status 获取此状态
 _state = {
-    "status": "idle",
-    "message": "等待开始",
-    "progress": 0,
-    "total": 0,
-    "max_score": 100,
-    "results": [],
-    "latest_screenshot": "",
-    "stop_requested": False,
-    "driver": None,
-    "finder": None,
-    "login_confirmed": False,
-    "page_confirmed": False,
-    "locate_mode": "auto",
-    "locate_phase": "",
-    "detected_info": None,
-    "score_pos": None,
-    "submit_pos": None,
-    "reference": "",
+    "status": "idle",           # 主状态：idle→starting→login_waiting→page_waiting→detecting→locating→running→finished
+    "message": "等待开始",       # 当前提示信息，显示在前端状态栏
+    "progress": 0,              # 已批改份数
+    "total": 0,                 # 总批改份数
+    "max_score": 100,           # 满分
+    "results": [],              # 批改结果列表
+    "latest_screenshot": "",    # 最新截图路径
+    "stop_requested": False,    # 用户是否请求停止
+    "driver": None,             # Selenium WebDriver 实例（不序列化到前端）
+    "finder": None,             # ElementFinder 实例（不序列化到前端）
+    "login_confirmed": False,   # 用户是否确认已登录
+    "page_confirmed": False,    # 用户是否确认页面就绪
+    "locate_mode": "auto",      # 定位方式："auto"（自动检测）或 "manual"（手动标记）
+    "locate_phase": "",         # 定位子阶段（见下方说明）
+    "detected_info": None,      # 自动模式下检测到的元素信息
+    "score_pos": None,          # 手动模式：打分框的视口坐标 {x, y}
+    "submit_pos": None,         # 手动模式：提交按钮的视口坐标 {x, y}
+    "reference": "",            # 参考答案与评分标准
 }
+# 线程锁：Flask 请求处理和后台批改线程并发访问 _state，需要加锁保护
 _state_lock = threading.Lock()
+
+# locate_phase 子阶段说明：
+#   "auto_confirm"      - 自动检测完成，等待用户确认
+#   "manual_mark_score" - 手动模式，等待用户点击打分框
+#   "manual_mark_submit"- 手动模式，打分框已标记，等待用户点击提交按钮
+#   "manual_done"       - 手动模式，两处都已标记，等待用户确认
+#   "awaiting_confirm"  - 已处理完标记，等待用户点击「确认定位」
+#   "confirmed"         - 用户已确认，退出定位阶段
+#   "re_detecting"      - 用户请求重新检测/标记
 
 
 def _get(key):
@@ -122,11 +134,19 @@ def confirm_ready():
 
 
 def confirm_locate():
+    """
+    用户点击「确认定位」按钮后调用。
+    关键逻辑：
+    1. 手动模式下，直接将坐标写入 finder（避免与主循环的竞态条件）
+    2. 移除覆盖层和高亮
+    3. 将状态推进到「locate_confirmed」，主循环检测到后开始批改
+    """
     status = _get("status")
     phase = _get("locate_phase")
+    # 支持多种子阶段：自动确认、手动完成、等待确认、已确认
     if status == "locating" and phase in ("auto_confirm", "manual_done", "awaiting_confirm", "confirmed"):
-        # In manual mode, set positions in finder directly to avoid race
-        # condition with the main loop's manual_done processing.
+        # 手动模式：直接设置 finder 坐标，不依赖主循环处理
+        # 这样即使主循环还没处理 manual_done，坐标也已经就位
         if _get("locate_mode") == "manual":
             sp = _get("score_pos")
             bp = _get("submit_pos")
@@ -134,8 +154,10 @@ def confirm_locate():
             if sp and bp and finder:
                 finder.set_manual_score(sp["x"], sp["y"])
                 finder.set_manual_submit(bp["x"], bp["y"])
+        # 移除覆盖层和元素高亮
         remove_overlay(_get("driver"))
         clear_highlights(_get("driver"))
+        # 推进状态，主循环会检测到并退出定位阶段
         _set("locate_phase", "confirmed")
         _set("status", "locate_confirmed")
         _set("message", "定位已确认，开始批改...")
@@ -156,6 +178,10 @@ def update_reference(ref):
 
 
 def mark_score_pos(x, y):
+    """
+    覆盖层回调：用户在浏览器中点击了打分框位置。
+    保存坐标，将子阶段从「等待点打分框」推进到「等待点提交按钮」。
+    """
     status = _get("status")
     if status == "locating":
         _set("score_pos", {"x": int(x), "y": int(y)})
@@ -168,6 +194,11 @@ def mark_score_pos(x, y):
 
 
 def mark_submit_pos(x, y):
+    """
+    覆盖层回调：用户在浏览器中点击了提交按钮位置。
+    保存坐标，将子阶段设为「manual_done」（两处都已标记）。
+    前端轮询到 manual_done 后会显示「确认定位」按钮。
+    """
     status = _get("status")
     if status == "locating":
         _set("submit_pos", {"x": int(x), "y": int(y)})
@@ -218,85 +249,98 @@ def _is_logged_in(driver):
 # ============ 覆盖层注入 ============
 
 
-OVERLAY_SCRIPT = """
-(function(){
+OVERLAY_SCRIPT_TEMPLATE = """
+(function(){{
 if(window.__aiGraderOverlay) return;
 window.__aiGraderOverlay = true;
-window.__aiGraderClicks = {score:null, submit:null};
+window.__aiGraderClicks = {{score:null, submit:null}};
+var API_BASE = '{api_base}';
 
 var overlay = document.createElement('div');
 overlay.id = '__aiGraderOverlay';
 overlay.innerHTML = `
 <style>
-#__aiGraderOverlay{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2147483646;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Helvetica Neue',sans-serif}
-.__ago-bg{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,113,227,.06);pointer-events:none}
-.__ago-hdr{position:relative;background:rgba(0,0,0,.82);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:#fff;padding:14px 20px;text-align:center;font-size:15px;font-weight:500;z-index:1;letter-spacing:-.01em}
-.__ago-hdr small{display:block;color:rgba(255,255,255,.55);font-size:12px;margin-top:4px;font-weight:400}
-.__ago-mid{flex:1;position:relative;cursor:crosshair}
-.__ago-marker{position:absolute;width:24px;height:24px;pointer-events:none;transform:translate(-50%,-50%)}
-.__ago-marker::before,.__ago-marker::after{content:'';position:absolute;background:#0071e3}
-.__ago-marker::before{width:2px;height:24px;left:11px;top:0}
-.__ago-marker::after{width:24px;height:2px;top:11px;left:0}
-.__ago-marker .__ago-ring{position:absolute;width:32px;height:32px;border:2.5px solid #0071e3;border-radius:50%;transform:translate(-50%,-50%);animation:__agoPulse 2s ease-in-out infinite}
-.__ago-marker .__ago-lbl{position:absolute;top:-24px;left:50%;transform:translateX(-50%);background:#0071e3;color:#fff;font-size:11px;font-weight:500;padding:2px 8px;border-radius:6px;white-space:nowrap;letter-spacing:.02em}
-@keyframes __agoPulse{0%,100%{opacity:1;transform:translate(-50%,-50%) scale(1)}50%{opacity:.4;transform:translate(-50%,-50%) scale(1.15)}}
+#__aiGraderOverlay{{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2147483646;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Helvetica Neue',sans-serif}}
+.__ago-bg{{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,113,227,.06);pointer-events:none}}
+.__ago-hdr{{position:relative;background:rgba(0,0,0,.82);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:#fff;padding:14px 20px;text-align:center;font-size:15px;font-weight:500;z-index:1;letter-spacing:-.01em}}
+.__ago-hdr small{{display:block;color:rgba(255,255,255,.55);font-size:12px;margin-top:4px;font-weight:400}}
+.__ago-mid{{flex:1;position:relative;cursor:crosshair}}
+.__ago-marker{{position:absolute;width:24px;height:24px;pointer-events:none;transform:translate(-50%,-50%)}}
+.__ago-marker::before,.__ago-marker::after{{content:'';position:absolute;background:#0071e3}}
+.__ago-marker::before{{width:2px;height:24px;left:11px;top:0}}
+.__ago-marker::after{{width:24px;height:2px;top:11px;left:0}}
+.__ago-marker .__ago-ring{{position:absolute;width:32px;height:32px;border:2.5px solid #0071e3;border-radius:50%;transform:translate(-50%,-50%);animation:__agoPulse 2s ease-in-out infinite}}
+.__ago-marker .__ago-lbl{{position:absolute;top:-24px;left:50%;transform:translateX(-50%);background:#0071e3;color:#fff;font-size:11px;font-weight:500;padding:2px 8px;border-radius:6px;white-space:nowrap;letter-spacing:.02em}}
+@keyframes __agoPulse{{0%,100%{{opacity:1;transform:translate(-50%,-50%) scale(1)}}50%{{opacity:.4;transform:translate(-50%,-50%) scale(1.15)}}}}
 </style>
 <div class="__ago-bg"></div>
 <div class="__ago-hdr" id="__agoHdr">请点击打分框位置<small>在页面 app 中完成标记操作</small></div>
 <div class="__ago-mid" id="__agoMid"></div>`;
 document.body.appendChild(overlay);
 
-function __agoUpdate(){
+function __agoUpdate(){{
 var s=window.__aiGraderClicks.score,p=window.__aiGraderClicks.submit;
 var hdr=document.getElementById('__agoHdr');
-if(s&&p){hdr.innerHTML='两处已标记<small>可在页面 app 中确认，或继续点击修改位置</small>'}
-else if(s){hdr.innerHTML='请点击<b>提交按钮</b>位置<small>在页面中点击提交按钮</small>'}
-else{hdr.innerHTML='请点击<b>打分框</b>位置<small>在页面中点击打分框</small>'}
-}
+if(s&&p){{hdr.innerHTML='两处已标记<small>可在页面 app 中确认，或继续点击修改位置</small>'}}
+else if(s){{hdr.innerHTML='请点击<b>提交按钮</b>位置<small>在页面中点击提交按钮</small>'}}
+else{{hdr.innerHTML='请点击<b>打分框</b>位置<small>在页面中点击打分框</small>'}}
+}}
 
-overlay.querySelector('#__agoMid').addEventListener('click',function(e){
+function __agoPost(url, data) {{
+  return fetch(API_BASE + url, {{
+    method: 'POST',
+    headers: {{'Content-Type': 'application/json'}},
+    body: JSON.stringify(data)
+  }}).catch(function(err) {{ console.error('[AI改卷] API调用失败:', url, err); }});
+}}
+
+overlay.querySelector('#__agoMid').addEventListener('click',function(e){{
 var mid=overlay.querySelector('#__agoMid');
-var x=Math.round(e.clientX),y=Math.round(e.clientY);
+var rect=mid.getBoundingClientRect();
+// vx,vy = viewport coords for elementFromPoint (correct positioning)
+var vx=Math.round(e.clientX),vy=Math.round(e.clientY);
+// mx,my = coords relative to __ago-mid for marker display
+var mx=Math.round(e.clientX-rect.left),my=Math.round(e.clientY-rect.top);
 var clicks=window.__aiGraderClicks;
-if(!clicks.score){
-clicks.score={x:x,y:y};
+if(!clicks.score){{
+clicks.score={{x:vx,y:vy}};
 var m=document.createElement('div');m.className='__ago-marker';m.id='__agoMS';
-m.style.left=x+'px';m.style.top=y+'px';
+m.style.left=mx+'px';m.style.top=my+'px';
 m.innerHTML='<div class="__ago-ring"></div><div class="__ago-lbl">打分框</div>';
 mid.appendChild(m);
-fetch('/api/auto/mark-score',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({x:x,y:y})}).catch(function(){});
-}else if(!clicks.submit){
-clicks.submit={x:x,y:y};
+__agoPost('/api/auto/mark-score',{{x:vx,y:vy}});
+}}else if(!clicks.submit){{
+clicks.submit={{x:vx,y:vy}};
 var old=document.getElementById('__agoMP');if(old)old.remove();
 var m2=document.createElement('div');m2.className='__ago-marker';m2.id='__agoMP';
-m2.style.left=x+'px';m2.style.top=y+'px';
+m2.style.left=mx+'px';m2.style.top=my+'px';
 m2.innerHTML='<div class="__ago-ring"></div><div class="__ago-lbl">提交按钮</div>';
 mid.appendChild(m2);
-fetch('/api/auto/mark-submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({x:x,y:y})}).catch(function(){});
-}else{
-clicks.score={x:x,y:y};
+__agoPost('/api/auto/mark-submit',{{x:vx,y:vy}});
+}}else{{
+clicks.score={{x:vx,y:vy}};
 clicks.submit=null;
 var oldM=document.getElementById('__agoMS');if(oldM)oldM.remove();
 var oldP=document.getElementById('__agoMP');if(oldP)oldP.remove();
 var m3=document.createElement('div');m3.className='__ago-marker';m3.id='__agoMS';
-m3.style.left=x+'px';m3.style.top=y+'px';
+m3.style.left=mx+'px';m3.style.top=my+'px';
 m3.innerHTML='<div class="__ago-ring"></div><div class="__ago-lbl">打分框</div>';
 mid.appendChild(m3);
-fetch('/api/auto/mark-score',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({x:x,y:y})}).catch(function(){});
-}
+__agoPost('/api/auto/mark-score',{{x:vx,y:vy}});
+}}
 __agoUpdate();
-});
+}});
 
-window.__agoReset=function(){
-window.__aiGraderClicks={score:null,submit:null};
+window.__agoReset=function(){{
+window.__aiGraderClicks={{score:null,submit:null}};
 var mid=overlay.querySelector('#__agoMid');mid.innerHTML='';
 __agoUpdate();
-};
-window.__agoGetState=function(){
+}};
+window.__agoGetState=function(){{
 var c=window.__aiGraderClicks;
-return {score:c.score,submit:c.submit};
-};
-})();
+return {{score:c.score,submit:c.submit}};
+}};
+}})();
 """
 
 
@@ -305,15 +349,18 @@ def inject_click_overlay():
     driver = _get("driver")
     if not driver:
         return
+    # Build the overlay script with the absolute API base URL so that
+    # fetch() calls from the target website reach our Flask server.
+    overlay_script = OVERLAY_SCRIPT_TEMPLATE.format(api_base="http://127.0.0.1:5000")
     try:
         driver.switch_to.default_content()
-        driver.execute_script(OVERLAY_SCRIPT)
+        driver.execute_script(overlay_script)
         iframes = driver.find_elements("tag name", "iframe")
         for i in range(len(iframes)):
             try:
                 driver.switch_to.default_content()
                 driver.switch_to.frame(i)
-                driver.execute_script(OVERLAY_SCRIPT)
+                driver.execute_script(overlay_script)
             except Exception:
                 pass
         driver.switch_to.default_content()
@@ -629,6 +676,55 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score, ta
 
         clear_highlights(driver)
 
+        # ========== 批改前预验证：确认标记坐标仍然有效 ==========
+        if locate_mode == "manual":
+            _set("message", "正在验证标记坐标...")
+            print("[auto] 预验证标记坐标...")
+            try:
+                # 滚动到顶部，确保视口坐标与标记时一致
+                driver.execute_script("window.scrollTo(0, 0);")
+                time.sleep(0.5)
+                # 验证打分框坐标
+                sp = _get("score_pos")
+                if sp:
+                    el = driver.execute_script(
+                        "return document.elementFromPoint(arguments[0], arguments[1]);",
+                        sp["x"], sp["y"]
+                    )
+                    if el:
+                        tag = el.tag_name.lower()
+                        cls = el.get_attribute("className") or ""
+                        print("[预验证] 打分框坐标 (" + str(sp["x"]) + ", " + str(sp["y"]) + "): "
+                              "<" + tag + "> class='" + cls[:50] + "'")
+                        if "__aiGrader" in cls or "__ago" in cls:
+                            _set("status", "error")
+                            _set("message", "打分框坐标处仍是覆盖层，请重新标记（覆盖层未完全移除）")
+                            return
+                    else:
+                        print("[预验证] 警告：打分框坐标处无元素")
+                # 验证提交按钮坐标
+                bp = _get("submit_pos")
+                if bp:
+                    el = driver.execute_script(
+                        "return document.elementFromPoint(arguments[0], arguments[1]);",
+                        bp["x"], bp["y"]
+                    )
+                    if el:
+                        tag = el.tag_name.lower()
+                        cls = el.get_attribute("className") or ""
+                        print("[预验证] 提交按钮坐标 (" + str(bp["x"]) + ", " + str(bp["y"]) + "): "
+                              "<" + tag + "> class='" + cls[:50] + "'")
+                        if "__aiGrader" in cls or "__ago" in cls:
+                            _set("status", "error")
+                            _set("message", "提交按钮坐标处仍是覆盖层，请重新标记（覆盖层未完全移除）")
+                            return
+                    else:
+                        print("[预验证] 警告：提交按钮坐标处无元素")
+                print("[预验证] 标记坐标验证通过")
+            except Exception as e:
+                print("[预验证] 验证出错: " + str(e))
+                # 验证出错不阻断流程，继续尝试批改
+
         _set("status", "running")
         _set("message", "开始批改（满分" + str(max_score) + "分）...")
         results = []
@@ -688,20 +784,29 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score, ta
                 time.sleep(1)
                 try:
                     if locate_mode == "manual":
+                        # 手动模式：用标记的坐标填分和提交
+                        # 先滚动到顶部，确保视口坐标与标记时一致
+                        driver.execute_script("window.scrollTo(0, 0);")
+                        time.sleep(0.5)
+                        print("[auto] " + name + " 开始填分 (score=" + str(score) + ")")
                         finder.fill_score_manual(driver, score)
                         time.sleep(0.8)
+                        print("[auto] " + name + " 开始提交")
                         finder.click_submit_manual(driver)
                     else:
+                        # 自动模式：重新检测元素后填分和提交
                         finder.re_detect()
                         finder.fill_score(driver, score)
                         time.sleep(0.8)
                         finder.click_submit(driver)
                     time.sleep(3)
                     last_error = ""
+                    print("[auto] " + name + " 填分提交成功")
                     break
                 except Exception as e:
                     last_error = "填分失败: " + str(e)
                     print("[auto] " + name + " " + last_error)
+                    # 移除刚才添加的结果（因为填分失败，不能算成功）
                     results.pop()
                     _set("results", results)
                     continue

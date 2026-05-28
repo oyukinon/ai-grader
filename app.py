@@ -15,6 +15,28 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = config.MAX_UPLOAD_SIZE * 1024 * 1024
 
 
+@app.after_request
+def add_cors_headers(response):
+    """
+    跨域支持：覆盖层脚本注入在目标网站（如智学网）上运行，
+    需要跨域请求本地 Flask 服务器（localhost:5000）。
+    所有响应都添加 CORS 头，允许任意来源的请求。
+    """
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return response
+
+
+@app.route("/api/auto/<path:sub>", methods=["OPTIONS"])
+def auto_options(sub):
+    """
+    处理浏览器 CORS 预检请求。
+    浏览器在发送跨域 POST 请求前，会先发一个 OPTIONS 请求确认是否允许。
+    """
+    return "", 204
+
+
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in config.ALLOWED_EXTENSIONS
 
@@ -182,6 +204,7 @@ def auto_redo_locate():
 
 @app.route("/api/auto/mark-score", methods=["POST"])
 def auto_mark_score():
+    """覆盖层点击打分框后调用，传入视口坐标 (x, y)"""
     import auto_grader
     data = request.get_json()
     x = int(data.get("x", 0))
@@ -192,6 +215,7 @@ def auto_mark_score():
 
 @app.route("/api/auto/mark-submit", methods=["POST"])
 def auto_mark_submit():
+    """覆盖层点击提交按钮后调用，传入视口坐标 (x, y)"""
     import auto_grader
     data = request.get_json()
     x = int(data.get("x", 0))
@@ -235,7 +259,8 @@ if __name__ == "__main__":
     print("  手动改卷: http://127.0.0.1:5000")
     print("  自动阅卷: http://127.0.0.1:5000/auto")
     print("=" * 50)
-    # use_reloader=False prevents Flask from spawning a child process,
-    # which would cause open_browser to fire twice (once per process).
+    # use_reloader=False：禁用 Flask 的自动重载器。
+    # 原因：重载器会 fork 子进程，导致 open_browser 在父子进程中各执行一次，
+    # 从而打开两个浏览器窗口。禁用后只有一个进程，只打开一个窗口。
     threading.Timer(1.5, open_browser).start()
     app.run(debug=True, use_reloader=False, port=5000)

@@ -366,8 +366,11 @@ class ElementFinder:
         return el
 
     def _find_element_at_coord_with_iframe(self, driver, pos):
-        """Try to find element at coordinates, checking main page then iframes"""
-        # Try main page first
+        """
+        在给定视口坐标处查找元素，依次检查：主页面 → 每个 iframe → 主页面兜底。
+        跳过 html/body 标签（说明坐标处没有实际可交互元素）。
+        """
+        # 先在主页面查找
         driver.switch_to.default_content()
         el = driver.execute_script(
             "return document.elementFromPoint(arguments[0], arguments[1]);",
@@ -375,7 +378,7 @@ class ElementFinder:
         )
         if el and el.tag_name.lower() not in ("html", "body"):
             return el
-        # Try each iframe
+        # 主页面没找到，逐个 iframe 尝试
         iframes = driver.find_elements(By.TAG_NAME, "iframe")
         for i in range(len(iframes)):
             try:
@@ -389,7 +392,7 @@ class ElementFinder:
                     return el
             except Exception:
                 continue
-        # Fall back to main page
+        # 兜底：回到主页面再试一次
         driver.switch_to.default_content()
         el = driver.execute_script(
             "return document.elementFromPoint(arguments[0], arguments[1]);",
@@ -399,13 +402,42 @@ class ElementFinder:
             raise Exception("坐标 (" + str(pos["x"]) + ", " + str(pos["y"]) + ") 处无元素")
         return el
 
+    def _validate_element(self, el, expected_role, pos):
+        """
+        验证找到的元素是否合理。
+        expected_role: "score"（打分框）或 "submit"（提交按钮）
+        pos: 标记坐标，用于错误提示
+        """
+        tag = el.tag_name.lower()
+        text = el.text.strip() if hasattr(el, 'text') else ""
+        cls = el.get_attribute("className") or ""
+        # 检查是否是覆盖层残留（AI改卷系统的覆盖层元素）
+        if "__aiGrader" in cls or "__ago" in cls:
+            raise Exception(
+                "坐标 (" + str(pos["x"]) + ", " + str(pos["y"]) + ") 处仍是覆盖层元素，"
+                "覆盖层可能未完全移除。请重新标记。"
+            )
+        print("[验证] 坐标 (" + str(pos["x"]) + ", " + str(pos["y"]) + ") 处找到: "
+              "<" + tag + "> text='" + text[:30] + "' class='" + cls[:50] + "'")
+        return True
+
     def fill_score_manual(self, driver, score):
+        """
+        手动模式填入分数：
+        1. 在标记坐标处查找元素
+        2. 验证元素不是覆盖层残留
+        3. 如果是 input/textarea → 填入分数值
+        4. 如果是其他元素（如数字按钮）→ 点击
+        """
         if not self.manual_score_pos:
             raise Exception("未设置打分框位置")
         score_str = str(int(float(score)))
         el = self._find_element_at_coord_with_iframe(driver, self.manual_score_pos)
+        # 验证元素有效性
+        self._validate_element(el, "score", self.manual_score_pos)
         tag = el.tag_name.lower()
         if tag in ("input", "textarea"):
+            # 输入框：清空后填入分数，触发 input/change/blur 事件让页面框架识别
             el.click()
             time.sleep(0.2)
             el.clear()
@@ -417,22 +449,36 @@ class ElementFinder:
                 "arguments[0].dispatchEvent(new Event('blur',{bubbles:true}));",
                 el, score_str,
             )
+            # 验证填入是否成功
+            actual = el.get_attribute("value")
+            if actual != score_str:
+                print("[填分] 警告：填入值 '" + score_str + "' 与实际值 '" + str(actual) + "' 不一致")
             print("[填分] 手动输入框填入: " + score_str)
         else:
+            # 非输入框（如数字按钮）：直接点击
             el.click()
-            print("[填分] 手动点击元素: " + tag + " (" + score_str + ")")
+            print("[填分] 手动点击元素: <" + tag + "> (" + score_str + ")")
         driver.switch_to.default_content()
         return True
 
     def click_submit_manual(self, driver):
+        """
+        手动模式点击提交按钮：
+        1. 在标记坐标处查找元素
+        2. 验证元素不是覆盖层残留
+        3. 点击（普通点击失败时用 JS 点击兜底）
+        """
         if not self.manual_submit_pos:
             raise Exception("未设置提交按钮位置")
         el = self._find_element_at_coord_with_iframe(driver, self.manual_submit_pos)
+        # 验证元素有效性
+        self._validate_element(el, "submit", self.manual_submit_pos)
         try:
             el.click()
         except Exception:
+            # 普通点击失败（如元素被遮挡），用 JS 强制点击
             driver.execute_script("arguments[0].click();", el)
         txt = el.text.strip()
-        print("[提交] 手动点击: " + txt)
+        print("[提交] 手动点击: <" + el.tag_name.lower() + "> " + txt)
         driver.switch_to.default_content()
         return True
