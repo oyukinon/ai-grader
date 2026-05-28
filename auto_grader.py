@@ -73,7 +73,7 @@ def load_last_session():
     return None
 
 
-def start_grader(reference, count, browser_type, api_key, api_base, model, max_score=100, locate_mode="auto"):
+def start_grader(reference, count, browser_type, api_key, api_base, model, max_score=100, locate_mode="auto", target_url="https://www.zhixue.com"):
     old_driver = _get("driver")
     if old_driver:
         try:
@@ -99,7 +99,7 @@ def start_grader(reference, count, browser_type, api_key, api_base, model, max_s
     _set("detected_info", None)
     _set("score_pos", None)
     _set("submit_pos", None)
-    t = threading.Thread(target=_run, args=(reference, count, browser_type, api_key, api_base, model, int(max_score)), daemon=True)
+    t = threading.Thread(target=_run, args=(reference, count, browser_type, api_key, api_base, model, int(max_score), target_url), daemon=True)
     t.start()
 
 
@@ -490,7 +490,7 @@ def ai_grade(reference, max_score, api_key, api_base, model, student_answer=None
 # ============ 主运行 ============
 
 
-def _run(reference, count, browser_type, api_key, api_base, model, max_score):
+def _run(reference, count, browser_type, api_key, api_base, model, max_score, target_url="https://www.zhixue.com"):
     driver = None
     try:
         browser_name = "Edge" if browser_type == "edge" else "Chrome"
@@ -502,8 +502,8 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score):
             return
         _set("driver", driver)
 
-        _set("message", "正在打开智学网...")
-        driver.get("https://www.zhixue.com")
+        _set("message", "正在打开目标网站...")
+        driver.get(target_url)
         time.sleep(3)
 
         if _is_logged_in(driver):
@@ -511,7 +511,7 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score):
             _set("message", "检测到已登录，正在自动确认...")
         else:
             _set("status", "login_waiting")
-            _set("message", "请在浏览器窗口中登录智学网")
+            _set("message", "请在浏览器窗口中登录")
 
         def watch_login():
             while _get("status") in ("login_waiting", "auto_login_detected"):
@@ -671,12 +671,12 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score):
                 try:
                     if locate_mode == "manual":
                         finder.fill_score_manual(driver, score)
-                        time.sleep(1)
+                        time.sleep(0.8)
                         finder.click_submit_manual(driver)
                     else:
                         finder.re_detect()
                         finder.fill_score(driver, score)
-                        time.sleep(1)
+                        time.sleep(0.8)
                         finder.click_submit(driver)
                     time.sleep(3)
                     last_error = ""

@@ -120,6 +120,7 @@
         <div class="section">
             <div class="section-label">批改配置</div>
             <div class="card">
+                <div class="form-row"><label>目标网址</label><input type="text" id="targetUrl" placeholder="https://www.zhixue.com" value="https://www.zhixue.com"></div>
                 <div class="form-row"><label>参考答案与评分标准</label><textarea id="reference" placeholder="输入标准答案和评分标准..."></textarea></div>
                 <div class="form-grid-4">
                     <div class="form-row"><label>满分</label><input type="number" id="maxScore" value="4" min="1" max="1000"></div>
@@ -220,6 +221,7 @@ function saveFormToStorage(){
         localStorage.setItem(LS_PREFIX+'reference',document.getElementById('reference').value);
         localStorage.setItem(LS_PREFIX+'maxScore',document.getElementById('maxScore').value);
         localStorage.setItem(LS_PREFIX+'count',document.getElementById('count').value);
+        localStorage.setItem(LS_PREFIX+'targetUrl',document.getElementById('targetUrl').value);
         var br=document.querySelector('input[name="browser"]:checked');
         if(br)localStorage.setItem(LS_PREFIX+'browser',br.value);
         localStorage.setItem(LS_PREFIX+'locateMode',locateMode);
@@ -235,6 +237,7 @@ function loadFormFromStorage(){
         v=localStorage.getItem(LS_PREFIX+'reference');if(v!==null)document.getElementById('reference').value=v;
         v=localStorage.getItem(LS_PREFIX+'maxScore');if(v!==null)document.getElementById('maxScore').value=v;
         v=localStorage.getItem(LS_PREFIX+'count');if(v!==null)document.getElementById('count').value=v;
+        v=localStorage.getItem(LS_PREFIX+'targetUrl');if(v!==null)document.getElementById('targetUrl').value=v;
         v=localStorage.getItem(LS_PREFIX+'browser');
         if(v==='edge'){
             var segs=document.querySelectorAll('.seg-ctrl');
@@ -313,6 +316,7 @@ function startGrading(){
     var ms=parseInt(document.getElementById('maxScore').value)||100;
     var cnt=parseInt(document.getElementById('count').value);
     var br=document.querySelector('input[name="browser"]:checked').value;
+    var targetUrl=document.getElementById('targetUrl').value.trim()||'https://www.zhixue.com';
     if(!apiKey){alert('请填写 API Key');return}
     if(!apiBase){alert('请填写 API 地址');return}
     if(!model){alert('请填写模型名称');return}
@@ -334,7 +338,7 @@ function startGrading(){
     document.getElementById('results').innerHTML='';
     document.getElementById('stats').innerHTML='';
     logLines=[];addLog('正在启动（满分'+ms+'分，共'+cnt+'份）...');
-    fetch('/api/auto/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reference:ref,count:cnt,browser:br,api_key:apiKey,api_base:apiBase,model:model,max_score:ms,locate_mode:locateMode})}).then(function(r){return r.json()}).then(function(d){if(d.error){alert(d.error);resetBtn();return}pollTimer=setInterval(pollStatus,1500)}).catch(function(e){alert('启动失败: '+e.message);resetBtn()});
+    fetch('/api/auto/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reference:ref,count:cnt,browser:br,api_key:apiKey,api_base:apiBase,model:model,max_score:ms,locate_mode:locateMode,target_url:targetUrl})}).then(function(r){return r.json()}).then(function(d){if(d.error){alert(d.error);resetBtn();return}pollTimer=setInterval(pollStatus,1500)}).catch(function(e){alert('启动失败: '+e.message);resetBtn()});
 }
 function resetBtn(){document.getElementById('startBtn').disabled=false;document.getElementById('startBtn').innerHTML='开始自动阅卷';document.getElementById('stopBtn').style.display='none'}
 
@@ -380,7 +384,7 @@ function updateStepHint(s){
     var h=document.getElementById('stepHint');
     var msgs={
         starting:'正在启动浏览器...',
-        login_waiting:'<span class="browser-tag">浏览器</span>请在<b>浏览器窗口</b>中登录智学网。',
+        login_waiting:'<span class="browser-tag">浏览器</span>请在<b>浏览器窗口</b>中登录。',
         auto_login_detected:'<span class="browser-tag">浏览器</span>检测到已登录，正在跳转...',
         login_confirmed:'登录已确认，正在跳转...',
         page_waiting:'<span class="browser-tag">浏览器</span>请在<b>浏览器窗口</b>中进入阅卷页面，完成后点击「页面就绪」。',

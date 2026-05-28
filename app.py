@@ -115,6 +115,7 @@ def auto_start():
     model = data.get("model", "").strip()
     max_score = int(data.get("max_score", 100))
     locate_mode = data.get("locate_mode", "auto")
+    target_url = data.get("target_url", "https://www.zhixue.com").strip()
     if not api_key:
         return jsonify({"error": "请填写 API Key"}), 400
     if not api_base:
@@ -130,7 +131,7 @@ def auto_start():
     state = auto_grader.get_state()
     if state["status"] not in ("idle", "finished", "error", "stopped"):
         return jsonify({"error": "已有任务在运行中"}), 400
-    auto_grader.start_grader(reference, count, browser, api_key, api_base, model, max_score, locate_mode)
+    auto_grader.start_grader(reference, count, browser, api_key, api_base, model, max_score, locate_mode, target_url)
     return jsonify({"ok": True})
 
 
