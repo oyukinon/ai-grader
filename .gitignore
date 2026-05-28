@@ -27,3 +27,9 @@ Desktop.ini
 # 环境
 .env
 venv/
+
+skills/
+CLAUDE.md
+GEMINI.md
+.claude/
+superpowers/

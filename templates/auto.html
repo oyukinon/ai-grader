@@ -363,8 +363,8 @@ function updateUI(s){
             document.getElementById('locateManual').style.display='block';
             document.getElementById('locateLabel').textContent='手动标记定位';
             var phase=s.locate_phase||'';
-            if(phase==='manual_mark_score'){document.getElementById('manualHint').innerHTML='请在浏览器页面中点击<b>打分框</b>位置'}
-            else if(phase==='manual_mark_submit'){document.getElementById('manualHint').innerHTML='请在浏览器页面中点击<b>提交按钮</b>位置'}
+            if(phase==='manual_mark_score'){document.getElementById('manualHint').innerHTML='请在浏览器页面中点击<b>打分框</b>位置';document.getElementById('confirmLocateBtn').style.display='none'}
+            else if(phase==='manual_mark_submit'){document.getElementById('manualHint').innerHTML='请在浏览器页面中点击<b>提交按钮</b>位置';document.getElementById('confirmLocateBtn').style.display='none'}
             else if(phase==='manual_done'||phase==='awaiting_confirm'){document.getElementById('manualHint').innerHTML='标记完成，请确认';document.getElementById('confirmLocateBtn').style.display='inline-flex'}
             if(s.score_pos)document.getElementById('manualStatus').innerHTML='<span style="color:var(--green)">打分框 ('+s.score_pos.x+', '+s.score_pos.y+')</span>'+(s.submit_pos?' &nbsp;<span style="color:var(--green)">提交按钮 ('+s.submit_pos.x+', '+s.submit_pos.y+')</span>':'');
         }

@@ -365,12 +365,45 @@ class ElementFinder:
             raise Exception("坐标 (" + str(pos["x"]) + ", " + str(pos["y"]) + ") 处无元素")
         return el
 
+    def _find_element_at_coord_with_iframe(self, driver, pos):
+        """Try to find element at coordinates, checking main page then iframes"""
+        # Try main page first
+        driver.switch_to.default_content()
+        el = driver.execute_script(
+            "return document.elementFromPoint(arguments[0], arguments[1]);",
+            pos["x"], pos["y"]
+        )
+        if el and el.tag_name.lower() not in ("html", "body"):
+            return el
+        # Try each iframe
+        iframes = driver.find_elements(By.TAG_NAME, "iframe")
+        for i in range(len(iframes)):
+            try:
+                driver.switch_to.default_content()
+                driver.switch_to.frame(i)
+                el = driver.execute_script(
+                    "return document.elementFromPoint(arguments[0], arguments[1]);",
+                    pos["x"], pos["y"]
+                )
+                if el and el.tag_name.lower() not in ("html", "body"):
+                    return el
+            except Exception:
+                continue
+        # Fall back to main page
+        driver.switch_to.default_content()
+        el = driver.execute_script(
+            "return document.elementFromPoint(arguments[0], arguments[1]);",
+            pos["x"], pos["y"]
+        )
+        if not el:
+            raise Exception("坐标 (" + str(pos["x"]) + ", " + str(pos["y"]) + ") 处无元素")
+        return el
+
     def fill_score_manual(self, driver, score):
         if not self.manual_score_pos:
             raise Exception("未设置打分框位置")
         score_str = str(int(float(score)))
-        self.driver.switch_to.default_content()
-        el = self._find_element_at_coord(driver, self.manual_score_pos)
+        el = self._find_element_at_coord_with_iframe(driver, self.manual_score_pos)
         tag = el.tag_name.lower()
         if tag in ("input", "textarea"):
             el.click()
@@ -388,17 +421,18 @@ class ElementFinder:
         else:
             el.click()
             print("[填分] 手动点击元素: " + tag + " (" + score_str + ")")
+        driver.switch_to.default_content()
         return True
 
     def click_submit_manual(self, driver):
         if not self.manual_submit_pos:
             raise Exception("未设置提交按钮位置")
-        self.driver.switch_to.default_content()
-        el = self._find_element_at_coord(driver, self.manual_submit_pos)
+        el = self._find_element_at_coord_with_iframe(driver, self.manual_submit_pos)
         try:
             el.click()
         except Exception:
             driver.execute_script("arguments[0].click();", el)
         txt = el.text.strip()
         print("[提交] 手动点击: " + txt)
+        driver.switch_to.default_content()
         return True

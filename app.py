@@ -235,5 +235,7 @@ if __name__ == "__main__":
     print("  手动改卷: http://127.0.0.1:5000")
     print("  自动阅卷: http://127.0.0.1:5000/auto")
     print("=" * 50)
+    # use_reloader=False prevents Flask from spawning a child process,
+    # which would cause open_browser to fire twice (once per process).
     threading.Timer(1.5, open_browser).start()
-    app.run(debug=True, port=5000)
+    app.run(debug=True, use_reloader=False, port=5000)

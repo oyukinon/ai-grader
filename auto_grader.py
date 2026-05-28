@@ -28,6 +28,7 @@ _state = {
     "latest_screenshot": "",
     "stop_requested": False,
     "driver": None,
+    "finder": None,
     "login_confirmed": False,
     "page_confirmed": False,
     "locate_mode": "auto",
@@ -53,7 +54,7 @@ def get_state():
     with _state_lock:
         out = {}
         for k, v in _state.items():
-            if k == "driver":
+            if k in ("driver", "finder"):
                 continue
             if k == "results":
                 out[k] = v[-50:]
@@ -99,6 +100,7 @@ def start_grader(reference, count, browser_type, api_key, api_base, model, max_s
     _set("detected_info", None)
     _set("score_pos", None)
     _set("submit_pos", None)
+    _set("finder", None)
     t = threading.Thread(target=_run, args=(reference, count, browser_type, api_key, api_base, model, int(max_score), target_url), daemon=True)
     t.start()
 
@@ -121,7 +123,17 @@ def confirm_ready():
 
 def confirm_locate():
     status = _get("status")
-    if status == "locating":
+    phase = _get("locate_phase")
+    if status == "locating" and phase in ("auto_confirm", "manual_done", "awaiting_confirm", "confirmed"):
+        # In manual mode, set positions in finder directly to avoid race
+        # condition with the main loop's manual_done processing.
+        if _get("locate_mode") == "manual":
+            sp = _get("score_pos")
+            bp = _get("submit_pos")
+            finder = _get("finder")
+            if sp and bp and finder:
+                finder.set_manual_score(sp["x"], sp["y"])
+                finder.set_manual_submit(bp["x"], bp["y"])
         remove_overlay(_get("driver"))
         clear_highlights(_get("driver"))
         _set("locate_phase", "confirmed")
@@ -159,6 +171,7 @@ def mark_submit_pos(x, y):
     status = _get("status")
     if status == "locating":
         _set("submit_pos", {"x": int(x), "y": int(y)})
+        _set("locate_phase", "manual_done")
         _set("message", "两处已标记，请在页面中确认定位")
         return True
     return False
@@ -243,8 +256,7 @@ else{hdr.innerHTML='请点击<b>打分框</b>位置<small>在页面中点击打�
 
 overlay.querySelector('#__agoMid').addEventListener('click',function(e){
 var mid=overlay.querySelector('#__agoMid');
-var rect=mid.getBoundingClientRect();
-var x=Math.round(e.clientX-rect.left),y=Math.round(e.clientY-rect.top);
+var x=Math.round(e.clientX),y=Math.round(e.clientY);
 var clicks=window.__aiGraderClicks;
 if(!clicks.score){
 clicks.score={x:x,y:y};
@@ -551,6 +563,7 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score, ta
         _set("message", "正在分析页面...")
 
         finder = ElementFinder(driver)
+        _set("finder", finder)
         locate_mode = _get("locate_mode")
 
         if locate_mode == "auto":
@@ -588,14 +601,19 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score, ta
 
             while _get("status") == "locating" and not _get("stop_requested"):
                 phase = _get("locate_phase")
-                if phase == "confirmed":
+                if phase == "confirmed" or _get("status") == "locate_confirmed":
                     break
                 elif phase == "manual_done":
+                    # Re-check phase after acquiring lock to avoid race with confirm_locate()
+                    if _get("locate_phase") == "confirmed":
+                        break
                     sp = _get("score_pos")
                     bp = _get("submit_pos")
                     if sp and bp:
                         finder.set_manual_score(sp["x"], sp["y"])
                         finder.set_manual_submit(bp["x"], bp["y"])
+                    if _get("locate_phase") == "confirmed":
+                        break
                     _set("locate_phase", "awaiting_confirm")
                     _set("message", "标记完成，请在网页中确认定位")
                 elif phase == "re_detecting":
@@ -696,34 +714,46 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score, ta
             _set("progress", i + 1)
             time.sleep(2)
 
+        # Save results if any grading was done
         ok = [r for r in results if r.get("success")]
         avg = sum(r["data"]["score"] for r in ok) / len(ok) if ok else 0
-        result_file = os.path.join(SCREENSHOT_DIR, "results.json")
-        with open(result_file, "w", encoding="utf-8") as f:
-            json.dump(results, f, ensure_ascii=False, indent=2)
 
-        # 保存批改结果摘要到 last_session.json
-        scores = [r["data"]["score"] for r in ok]
-        session_data = {
-            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "total": count,
-            "success": len(ok),
-            "avg_score": round(avg, 1),
-            "max_score_val": max(scores) if scores else 0,
-            "min_score_val": min(scores) if scores else 0,
-            "max_score": max_score,
-            "recent_results": results[-20:],
-        }
-        try:
-            with open(RESULTS_FILE, "w", encoding="utf-8") as f:
-                json.dump(session_data, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print("[auto] 保存历史记录失败: " + str(e))
+        if results:
+            result_file = os.path.join(SCREENSHOT_DIR, "results.json")
+            try:
+                with open(result_file, "w", encoding="utf-8") as f:
+                    json.dump(results, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                print("[auto] 保存结果失败: " + str(e))
 
-        _set("status", "finished")
-        _set("message", "全部完成！成功 " + str(len(ok)) + "/" + str(count) + "，平均分 " + str(round(avg, 1)) + "/" + str(max_score))
+            scores = [r["data"]["score"] for r in ok]
+            session_data = {
+                "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "total": count,
+                "success": len(ok),
+                "avg_score": round(avg, 1),
+                "max_score_val": max(scores) if scores else 0,
+                "min_score_val": min(scores) if scores else 0,
+                "max_score": max_score,
+                "recent_results": results[-20:],
+            }
+            try:
+                with open(RESULTS_FILE, "w", encoding="utf-8") as f:
+                    json.dump(session_data, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                print("[auto] 保存历史记录失败: " + str(e))
+
+        if _get("stop_requested"):
+            _set("status", "stopped")
+            _set("message", "已停止。已完成 " + str(len(ok)) + "/" + str(count) + " 份")
+        else:
+            _set("status", "finished")
+            _set("message", "全部完成！成功 " + str(len(ok)) + "/" + str(count) + "，平均分 " + str(round(avg, 1)) + "/" + str(max_score))
 
     except Exception as e:
         _set("status", "error")
         _set("message", "错误: " + str(e))
         print("[auto] 异常: " + str(e))
+    finally:
+        # Clean up driver reference to avoid stale references
+        _set("finder", None)
