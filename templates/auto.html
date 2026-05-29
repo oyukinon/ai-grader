@@ -80,7 +80,10 @@
         .locate-info{font-size:.82rem;color:var(--text-secondary);padding:.4rem 0;line-height:1.6}
         .btn-group-wide{display:flex;gap:.5rem;margin-top:.75rem}
         .btn-group-wide .btn{flex:1}
-        .settings-toggle{display:none;margin-bottom:1rem}
+        .ai-status{display:inline-flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--accent);font-weight:500}
+.ai-status .pulse-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:aiPulse 1.2s ease-in-out infinite}
+@keyframes aiPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(1.5)}}
+.step-detail{font-size:.72rem;color:var(--text-secondary);margin-top:.25rem;font-weight:400}.settings-toggle{display:none;margin-bottom:1rem}
 .settings-toggle .btn{width:100%;justify-content:center;background:var(--surface);color:var(--text-secondary);box-shadow:var(--shadow);font-size:.8rem;padding:.45rem .8rem}
 .settings-toggle .btn:hover{color:var(--accent);background:rgba(0,113,227,.04)}
         @media(max-width:640px){.container{padding:1.25rem 1rem 3rem}header h1{font-size:1.6rem}.stats{grid-template-columns:1fr}.form-grid,.form-grid-3,.form-grid-4{grid-template-columns:1fr}.steps{overflow-x:auto}}
@@ -166,6 +169,7 @@
                     <span>满分 <span id="pMax">100</span> 分</span>
                     <span id="pPercent">0%</span>
                 </div>
+                <div id="stepDetail" class="step-detail" style="display:none;"></div>
                 <div style="margin-top:.5rem;">
                     <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
                 </div>
@@ -366,11 +370,11 @@ function startGrading(){
     document.getElementById('settingsSection').style.display='none';
     document.getElementById('settingsToggle').style.display='block';
     logLines=[];addLog('正在启动（满分'+ms+'分，共'+cnt+'份）...');
-    fetch('/api/auto/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reference:ref,count:cnt,browser:br,api_key:apiKey,api_base:apiBase,model:model,max_score:ms,locate_mode:locateMode,target_url:targetUrl})}).then(function(r){return r.json()}).then(function(d){if(d.error){alert(d.error);resetBtn();return}pollTimer=setInterval(pollStatus,1500)}).catch(function(e){alert('启动失败: '+e.message);resetBtn()});
+    fetch('/api/auto/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reference:ref,count:cnt,browser:br,api_key:apiKey,api_base:apiBase,model:model,max_score:ms,locate_mode:locateMode,target_url:targetUrl})}).then(function(r){return r.json()}).then(function(d){if(d.error){alert(d.error);resetBtn();return}pollTimer=setInterval(pollStatus,1000)}).catch(function(e){alert('启动失败: '+e.message);resetBtn()});
 }
 function resetBtn(){document.getElementById('startBtn').disabled=false;document.getElementById('startBtn').innerHTML='开始自动阅卷';document.getElementById('stopBtn').style.display='none';document.getElementById('settingsSection').style.display='block';document.getElementById('settingsToggle').style.display='none'}
 
-function pollStatus(){fetch('/api/auto/status').then(function(r){return r.json()}).then(function(s){updateUI(s);if(s.message)addLog(s.message);if(s.status==='finished'||s.status==='error'||s.status==='idle'||s.status==='stopped'){clearInterval(pollTimer);resetBtn();updateStats(s.results||[]);setStep(6)}})}
+var lastPollMsg='';function pollStatus(){fetch('/api/auto/status').then(function(r){return r.json()}).then(function(s){updateUI(s);if(s.message&&s.message!==lastPollMsg){addLog(s.message);lastPollMsg=s.message}if(s.status==='finished'||s.status==='error'||s.status==='idle'||s.status==='stopped'){clearInterval(pollTimer);resetBtn();updateStats(s.results||[]);setStep(6)}})}
 
 function updateUI(s){
     document.getElementById('statusBox').innerHTML='<span class="status-dot '+dotClass(s.status)+'"></span>'+(s.message||'...');
@@ -403,6 +407,24 @@ function updateUI(s){
         document.getElementById('pDone').textContent=s.progress;
         document.getElementById('pTotal').textContent=s.total;
         document.getElementById('pPercent').textContent=pct+'%';
+        /* 更新详细步骤状态 */
+        var sd=document.getElementById('stepDetail');
+        if(s.message){
+            var stepText=s.message;
+            var isAI=stepText.indexOf('AI')>=0&&stepText.indexOf('评分中')>=0;
+            if(isAI){
+                sd.innerHTML='<span class="ai-status"><span class="pulse-dot"></span>'+stepText+'</span>';
+                sd.style.display='block';
+            }else if(stepText.indexOf('正在')>=0||stepText.indexOf('截图')>=0||stepText.indexOf('填入')>=0||stepText.indexOf('提交')>=0){
+                sd.innerHTML='<span class="ai-status" style="color:var(--text-secondary)"><span class="pulse-dot" style="background:var(--text-secondary)"></span>'+stepText+'</span>';
+                sd.style.display='block';
+            }else if(stepText.indexOf('得分')>=0){
+                sd.innerHTML='<span style="color:var(--green);font-size:.78rem;font-weight:500">✓ '+stepText+'</span>';
+                sd.style.display='block';
+            }else{
+                sd.style.display='none';
+            }
+        }
     }
     if(s.max_score){curMaxScore=s.max_score;document.getElementById('pMax').textContent=s.max_score}
     if(s.results&&s.results.length>0)appendResults(s.results);

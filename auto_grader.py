@@ -483,15 +483,32 @@ def encode_local_image(filepath):
 # ============ AI 评分 ============
 
 
+def _ai_grade_progress_updater(start_time, name, max_score):
+    """后台线程：每2秒更新一次状态消息，显示AI评分已等待时间"""
+    while True:
+        elapsed = int(time.time() - start_time)
+        if elapsed < 3:
+            msg = name + " AI 识别评分中..."
+        elif elapsed < 10:
+            msg = name + " AI 识别评分中... (已等待 " + str(elapsed) + "s)"
+        else:
+            msg = name + " AI 识别评分中... (已等待 " + str(elapsed) + "s，请耐心等待)"
+        _set("message", msg)
+        time.sleep(2)
+        # 如果状态不再是 AI 评分阶段，退出
+        cur_msg = _get("message")
+        if "AI 识别评分中" not in cur_msg:
+            break
+
+
 def ai_grade(reference, max_score, api_key, api_base, model, student_answer=None, image_data=None, is_image=False):
+    """调用 AI 模型评分，带有超时和耗时统计"""
     client = OpenAI(api_key=api_key, base_url=api_base)
     ms = int(max_score)
 
     if is_image:
-        answer_section = ""
         prompt_extra = "请仔细识别图片中学生的手写或打印答案"
     else:
-        answer_section = "\n\n## 学生答案\n\n" + student_answer
         prompt_extra = "请根据参考答案对学生答案进行评分"
 
     prompt = (
@@ -520,6 +537,16 @@ def ai_grade(reference, max_score, api_key, api_base, model, student_answer=None
         else:
             return None
 
+        # 记录开始时间，启动进度反馈线程
+        start_time = time.time()
+        print("[ai] 开始评分请求...")
+        progress_thread = threading.Thread(
+            target=_ai_grade_progress_updater,
+            args=(start_time, "", ms),
+            daemon=True
+        )
+        progress_thread.start()
+
         response = client.chat.completions.create(
             model=model,
             messages=[
@@ -528,7 +555,13 @@ def ai_grade(reference, max_score, api_key, api_base, model, student_answer=None
             ],
             temperature=0.3,
             max_tokens=2000,
+            timeout=60,
         )
+
+        # 评分完成，计算耗时
+        elapsed = round(time.time() - start_time, 1)
+        _set("message", "AI 评分完成 (耗时 " + str(elapsed) + "s)，解析结果中...")
+
         text = response.choices[0].message.content.strip()
         if "```json" in text:
             text = text.split("```json")[1].split("```")[0].strip()
@@ -536,16 +569,18 @@ def ai_grade(reference, max_score, api_key, api_base, model, student_answer=None
             text = text.split("```")[1].split("```")[0].strip()
         data = json.loads(text)
         data["max_score"] = ms
+        data["ai_elapsed"] = elapsed
         if data.get("score", 0) > ms:
             data["score"] = ms
         if data.get("score", 0) < 0:
             data["score"] = 0
+        print("[ai] 评分完成: " + str(data.get("score")) + "/" + str(ms) + " 耗时 " + str(elapsed) + "s")
         return data
     except Exception as e:
-        print("[ai] 评分失败: " + str(e))
+        elapsed = round(time.time() - start_time, 1) if 'start_time' in dir() else 0
+        print("[ai] 评分失败 (耗时 " + str(elapsed) + "s): " + str(e))
+        _set("message", "AI 评分失败 (" + str(elapsed) + "s): " + str(e)[:80])
         return None
-
-
 # ============ 主运行 ============
 
 
@@ -739,6 +774,7 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score, ta
 
             name = "学生" + str(i + 1)
             _set("progress", i)
+            student_start = time.time()
 
             last_error = ""
             for attempt in range(1, max_retry + 2):
@@ -752,24 +788,31 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score, ta
                         driver.refresh()
                     except Exception:
                         pass
-                    time.sleep(4)
+                    time.sleep(3)
                     # 手动模式下不重新检测（避免覆盖手动标记的坐标）
                     if locate_mode != "manual":
                         try:
                             finder.re_detect()
                         except Exception:
                             pass
-                    time.sleep(2)
+                    time.sleep(1)
 
-                _set("message", name + " (" + str(i + 1) + "/" + str(count) + ") 截图中...")
-                time.sleep(3)
+                # 步骤1：截图
+                _set("message", name + " (" + str(i + 1) + "/" + str(count) + ") 正在截图...")
+                time.sleep(1.5)
 
                 try:
                     path = take_screenshot(driver, name)
+                    screenshot_ok = True
                 except Exception:
                     last_error = "截图失败"
+                    screenshot_ok = False
                     continue
 
+                if not screenshot_ok:
+                    continue
+
+                # 步骤2：AI 识别评分（ai_grade 内部会通过后台线程实时更新等待时间）
                 _set("message", name + " AI 识别评分中...")
                 image_data = encode_local_image(path)
                 current_ref = _get("reference")
@@ -781,29 +824,33 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score, ta
 
                 score = result.get("score", 0)
                 summary = result.get("summary", "")
+                ai_time = result.get("ai_elapsed", 0)
                 results.append({"student": name, "success": True, "data": result})
-                _set("message", name + " 得分: " + str(score) + "/" + str(max_score) + " - " + summary)
+                _set("message", name + " 得分: " + str(score) + "/" + str(max_score) + " (AI耗时" + str(ai_time) + "s) " + summary)
                 _set("results", results)
 
-                time.sleep(1)
+                # 步骤3：填分并提交
                 try:
                     if locate_mode == "manual":
-                        # 手动模式：用标记的坐标填分和提交
-                        # fill_score_manual 和 click_submit_manual 内部会自动恢复滚动位置
+                        _set("message", name + " 正在填入分数 " + str(score) + "...")
                         print("[auto] " + name + " 开始填分 (score=" + str(score) + ")")
                         finder.fill_score_manual(driver, score)
-                        time.sleep(0.8)
+                        time.sleep(0.5)
+                        _set("message", name + " 正在点击提交...")
                         print("[auto] " + name + " 开始提交")
                         finder.click_submit_manual(driver)
                     else:
-                        # 自动模式：重新检测元素后填分和提交
+                        _set("message", name + " 正在重新检测元素...")
                         finder.re_detect()
+                        _set("message", name + " 正在填入分数 " + str(score) + "...")
                         finder.fill_score(driver, score)
-                        time.sleep(0.8)
+                        time.sleep(0.5)
+                        _set("message", name + " 正在点击提交...")
                         finder.click_submit(driver)
-                    time.sleep(3)
+                    time.sleep(2)
                     last_error = ""
-                    print("[auto] " + name + " 填分提交成功")
+                    elapsed = round(time.time() - student_start, 1)
+                    print("[auto] " + name + " 填分提交成功 (总耗时" + str(elapsed) + "s)")
                     break
                 except Exception as e:
                     last_error = "填分失败: " + str(e)
@@ -819,8 +866,8 @@ def _run(reference, count, browser_type, api_key, api_base, model, max_score, ta
                 _set("results", results)
 
             _set("progress", i + 1)
-            time.sleep(2)
-
+            # 进入下一个学生前的短暂等待
+            time.sleep(1)
         # Save results if any grading was done
         ok = [r for r in results if r.get("success")]
         avg = sum(r["data"]["score"] for r in ok) / len(ok) if ok else 0
